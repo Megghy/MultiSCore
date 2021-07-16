@@ -7,11 +7,9 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using Terraria;
-using Terraria.GameContent.Creative;
 using Terraria.Localization;
 using TerrariaApi.Server;
 using TShockAPI;
-using TShockAPI.DB;
 using TShockAPI.Hooks;
 
 namespace MultiSCore.Core
@@ -24,101 +22,48 @@ namespace MultiSCore.Core
             Key = key;
         }
         public string Name { get; set; }
-        public IPAddress IP { get; set; }
-        public int Port { get; set; }
         public string Key { get; set; }
         public List<Config.ForwordServer> TempServerList { get; set; } = new();
-        public void OnConnectRequest(int index, string key, string ip)
+        public void OnConnectRequest(MSCHooks.PlayerJoinEventArgs args)
         {
-            if (key != Key)
+            var index = args.Index;
+            
+            if (args.Key != Key)
             {
-                TShock.Log.ConsoleInfo($"<MultiSCore> 无效的秘钥: {key}");
+                TShock.Log.ConsoleInfo($"<MultiSCore> 无效的秘钥: {args.Key}");
                 NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral("无效的秘钥"));
-                return;
-            }
-            if (Netplay.IsBanned(Netplay.Clients[index].Socket.GetRemoteAddress()))
-            {
-                NetMessage.TrySendData(2, index, -1, Lang.mp[3].ToNetworkText(), 0, 0f, 0f, 0f, 0, 0, 0);
             }
             else
             {
-                if (TShock.ShuttingDown)
-                {
-                    NetMessage.SendData(2, index, -1, NetworkText.FromLiteral("服务器正在关闭"), 0, 0f, 0f, 0f, 0, 0, 0);
-                }
+                if (Netplay.IsBanned(Netplay.Clients[index].Socket.GetRemoteAddress()))
+                    NetMessage.TrySendData(2, index, -1, Lang.mp[3].ToNetworkText());
                 else
                 {
-                    TSPlayer tsplayer = new(index);
-                    Utils.CacheIP?.SetValue(tsplayer, ip);
-                    if (TShock.Utils.GetActivePlayerCount() + 1 > TShock.Config.Settings.MaxSlots + TShock.Config.Settings.ReservedSlots)
-                    {
-                        tsplayer.Disconnect(TShock.Config.Settings.ServerFullNoReservedReason);
-                    }
+                    if (TShock.ShuttingDown)
+                        NetMessage.SendData(2, index, -1, NetworkText.FromLiteral("服务器正在关闭"));
                     else
                     {
-                        if (!FileTools.OnWhitelist(tsplayer.IP))
-                        {
+                        TSPlayer tsplayer = new(index);
+                        Utils.CacheIP?.SetValue(tsplayer, args.IP);
+                        if (TShock.Utils.GetActivePlayerCount() + 1 > TShock.Config.Settings.MaxSlots + TShock.Config.Settings.ReservedSlots)
+                            tsplayer.Disconnect(TShock.Config.Settings.ServerFullNoReservedReason);
+                        else if (!FileTools.OnWhitelist(tsplayer.IP))
                             tsplayer.Disconnect(TShock.Config.Settings.WhitelistKickReason);
-                        }
-                        else
-                        {
-                            if (TShock.Geo != null)
-                            {
-                                string text = TShock.Geo.TryGetCountryCode(IPAddress.Parse(tsplayer.IP));
-                                tsplayer.Country = text == null ? "N/A" : GeoIPCountry.GetCountryNameByCode(text);
-                                bool flag4 = text == "A1" && TShock.Config.Settings.KickProxyUsers;
-                                if (flag4)
-                                {
-                                    tsplayer.Disconnect("不允许代理连接.");
-                                    return;
-                                }
-                            }
-                            TShock.Players[index] = tsplayer;
-                        }
-                    }
-                }
-                Netplay.Clients[index].State = 1;
-                NetMessage.TrySendData(3, index);
-            }
-        }
-        public void OnPlayerConnect(ConnectEventArgs args)
-        {
-            if (TShock.ShuttingDown)
-            {
-                NetMessage.SendData(2, args.Who, -1, NetworkText.FromLiteral("服务器正在关闭"), 0, 0f, 0f, 0f, 0, 0, 0);
-                args.Handled = true;
-            }
-            else
-            {
-                TSPlayer tsplayer = new(args.Who);
-                if (TShock.Utils.GetActivePlayerCount() + 1 > TShock.Config.Settings.MaxSlots + TShock.Config.Settings.ReservedSlots)
-                {
-                    tsplayer.Disconnect(TShock.Config.Settings.ServerFullNoReservedReason);
-                    args.Handled = true;
-                }
-                else
-                {
-                    if (!FileTools.OnWhitelist(tsplayer.IP))
-                    {
-                        tsplayer.Disconnect(TShock.Config.Settings.WhitelistKickReason);
-                        args.Handled = true;
-                    }
-                    else
-                    {
-                        if (TShock.Geo != null)
+                        else if (TShock.Geo != null)
                         {
                             string text = TShock.Geo.TryGetCountryCode(IPAddress.Parse(tsplayer.IP));
-                            tsplayer.Country = ((text == null) ? "N/A" : GeoIPCountry.GetCountryNameByCode(text));
-                            bool flag4 = text == "A1" && TShock.Config.Settings.KickProxyUsers;
-                            if (flag4)
+                            tsplayer.Country = text == null ? "N/A" : GeoIPCountry.GetCountryNameByCode(text);
+                            if (text == "A1" && TShock.Config.Settings.KickProxyUsers)
                             {
-                                tsplayer.Disconnect("Proxies are not allowed.");
-                                args.Handled = true;
+                                tsplayer.Disconnect("不允许代理连接.");
                                 return;
                             }
                         }
-                        TShock.Players[args.Who] = tsplayer;
+                        else
+                            TShock.Players[index] = tsplayer;
                     }
+                    Netplay.Clients[index].State = 1;
+                    NetMessage.TrySendData(3, index);
                 }
             }
         }
@@ -131,7 +76,7 @@ namespace MultiSCore.Core
             try
             {
                 var index = buffer.whoAmI;
-                if ((Netplay.Clients[index].State < 10 && packetid > 12 && packetid != 93 && packetid != 16 && packetid != 42 && packetid != 50 && packetid != 38 && packetid != 68 && packetid != 15) || (Netplay.Clients[index].State == 0 && packetid != 1 && packetid != 15))
+                if ((Netplay.Clients[index].State < 10 && packetid > 12 && packetid != 93 && packetid != 16 && packetid != 42 && packetid != 50 && packetid != 38 && packetid != 68 && packetid != 15 && packetid != 8 && packetid != 12) || (Netplay.Clients[index].State == 0 && packetid != 1 && packetid != 15))
                 {
                     TShock.Log.ConsoleInfo($"无效的操作 - {(PacketTypes)packetid}, State - {Netplay.Clients[index].State}");
                     return HookResult.Cancel;
@@ -141,38 +86,48 @@ namespace MultiSCore.Core
                     switch (packetid)
                     {
                         case 15:
-                            reader.BaseStream.Position = 4L;
-                            OnRecieveCustomData(index, (Utils.CustomPacket)buffer.readBuffer[3], reader);
+                            var type = (Utils.CustomPacket)buffer.readBuffer[3];
+                            var args = new MSCHooks.RecieveCustomDataEventArgs(index, type, reader);
+                            if (!MSCHooks.OnRecieveCustomData(args))
+                                OnRecieveCustomData(args);
                             return HookResult.Cancel;
                         case 1:
                             reader.BaseStream.Position = 3L;
                             var key = reader.ReadString();
-                            if (key.StartsWith("Terraria")) NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral("此服务器不允许直接连接"));
-                            else OnConnectRequest(index, key, reader.ReadString());
+                            if (key.StartsWith("Terraria"))
+                            {
+                                NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral("此服务器不允许直接连接"));
+                            }
+                            else
+                            {
+                                var joinArgs = new MSCHooks.PlayerJoinEventArgs(index, key, reader.ReadString());
+                                if (!MSCHooks.OnPlayerJoin(joinArgs)) OnConnectRequest(joinArgs);
+                            }
                             return HookResult.Cancel;
                         default:
                             return MSCMain.Instance.OldGetDataHandler.Invoke(buffer, ref packetid, ref readoffset, ref start, ref length);
                     }
                 }
             }
-            catch (Exception ex) { TShock.Log.ConsoleError($"<MultiSCore> Forword Recieve Error: {ex.Message}"); return HookResult.Cancel; }
+            catch (Exception ex) { TShock.Log.ConsoleError($"<MultiSCore> Forword recieve error: {ex.Message}"); return HookResult.Cancel; }
         }
-        public void OnRecieveCustomData(int index, Utils.CustomPacket type, BinaryReader reader)
+        public void OnRecieveCustomData(MSCHooks.RecieveCustomDataEventArgs args)
         {
-            try {
-                switch (type)
+            try
+            {
+                var plr = args.Player;
+                var reader = args.Reader;
+                switch (args.Type)
                 {
                     case Utils.CustomPacket.ServerList:
                         var key = reader.ReadString();
-                        var ss = reader.ReadString();
-                        if(Key == key) TempServerList = JsonConvert.DeserializeObject<List<Config.ForwordServer>>(ss);
-                        TShock.Log.ConsoleError(ss);
+                        if (Key == key) TempServerList = JsonConvert.DeserializeObject<List<Config.ForwordServer>>(reader.ReadString());
                         break;
                 }
             }
             catch (Exception ex)
             {
-                TShock.Log.ConsoleError($"<MultiSCore> 接收CustomData时发生错误: {ex}");
+                TShock.Log.ConsoleError($"<MultiSCore> An error occurred when process customdata: {ex}");
             }
         }
         public void OnPlayerCommand(PlayerCommandEventArgs args)
@@ -187,7 +142,7 @@ namespace MultiSCore.Core
             }
             catch (Exception ex)
             {
-                TShock.Log.ConsoleError($"<MultiSCore> 处理玩家命令时发生错误: {ex}");
+                TShock.Log.ConsoleError($"<MultiSCore> An error occurred when process player command: {ex}");
             }
         }
         public void OnSendData(SendBytesEventArgs args)

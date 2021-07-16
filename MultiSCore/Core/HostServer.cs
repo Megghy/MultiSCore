@@ -25,18 +25,11 @@ namespace MultiSCore.Core
         }
 
         public string Name { get; set; }
-        public IPAddress IP { get; set; }
-        public int Port { get; set; }
         public string Key { get; set; }
-        public void OnConnectRequest(int index, string key, string ip)
+        public void OnConnectRequest(MSCHooks.PlayerJoinEventArgs args)
         {
             //主机的连接请求不用管
         }
-        public void OnPlayerConnect(ConnectEventArgs args) 
-        {
-            //主服务器玩家连接不用管
-        }
-
         public void OnPlayerLeave(LeaveEventArgs args)
         {
             if (MSCMain.Instance.ForwordPlayers[args.Who] is { } mscp)
@@ -59,28 +52,27 @@ namespace MultiSCore.Core
             }
             return MSCMain.Instance.OldGetDataHandler.Invoke(buffer, ref packetid, ref readoffset, ref start, ref length);
         }
-        public void OnRecieveCustomData(int index, Utils.CustomPacket type, BinaryReader reader)
+        public void OnRecieveCustomData(MSCHooks.RecieveCustomDataEventArgs args)
         {
             try
             {
-                var plr = TShock.Players[index];
-                switch (type)
+                var plr = args.Player;
+                var reader = args.Reader;
+                switch (args.Type)
                 {
                     case Utils.CustomPacket.Command:
-                        var aaa = reader.ReadString();
-                        Commands.HandleCommand(plr, Commands.Specifier + aaa);
+                        Commands.HandleCommand(plr, Commands.Specifier + reader.ReadString());
                         break;
                 }
             }
             catch (Exception ex)
             {
-                TShock.Log.ConsoleError($"<MultiSCore> 接收CustomData时发生错误: {ex}");
+                TShock.Log.ConsoleError($"<MultiSCore> An error occurred when process customdata: {ex}");
             }
-            
         }
         public void OnPlayerCommand(PlayerCommandEventArgs args)
         {
-
+            //主机玩家使用命令不用管
         }
         public void OnSendData(SendBytesEventArgs args)
         {

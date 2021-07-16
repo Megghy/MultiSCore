@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using System;
 using System.IO;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Terraria;
 using Terraria.GameContent.NetModules;
@@ -27,6 +28,8 @@ namespace MultiSCore
         public string IP { get; set; } = "";
         public void Reset()
         {
+            ForwordIndex = -1;
+            Server = new();
             Connection?.Client?.Shutdown(SocketShutdown.Both);
             Connection?.Client?.Close();
             Connection?.Close();
@@ -49,7 +52,6 @@ namespace MultiSCore
                     return;
                 }
                 if (Connection is { Connected: true }) Connection.Close();
-                Player.TPlayer.active = false;
                 NetMessage.SendData(14, -1, Player.Index, null, Index, false.GetHashCode()); //隐藏原服务器玩家
 
                 Connection = new();
@@ -58,20 +60,21 @@ namespace MultiSCore
 
                 Connection.Connect(server.IP, server.Port);
                 SendDataToForword(new RawDataBuilder(1).PackString(server.Key).PackString(Player.IP));  //发起连接请求
-                SendDataToForword(new RawDataBuilder(Utils.CustomPacket.ServerList).PackString(server.Key).PackString(JsonConvert.SerializeObject(MSCMain.Instance.ServerConfig.Servers)));  //发送服务器列表
+                SendDataToForword(new RawDataBuilder(Utils.CustomPacket.ServerList).PackString(server.Key).PackString(JsonConvert.SerializeObject(MSCMain.Instance.ServerConfig.Servers))); //发送服务器列表
                 Task.Run(RecieveLoop);
             }
             catch (Exception ex)
             {
                 NetMessage.SendData(14, -1, -1, null, Index); //显示原服务器玩家 
-                TShock.Log.ConsoleError(ex.Message);
+                TShock.Log.ConsoleError($"<MultiSCore> An error occurred when switching server: {ex}");
             }
         }
         public void BackToHost()
         {
-            Dispose();
+
             if (MSCMain.Instance.IsHost)
             {
+                Dispose();
                 int sectionX = Netplay.GetSectionX(0);
                 int sectionX2 = Netplay.GetSectionX(Main.maxTilesX);
                 int sectionX3 = Netplay.GetSectionX(0);
@@ -83,33 +86,43 @@ namespace MultiSCore
                         Netplay.Clients[Index].TileSections[i, j] = false;
                     }
                 }
-                Player.Spawn(PlayerSpawnContext.SpawningIntoWorld);
+                NetMessage.SendData(14, -1, -1, null, Index); //显示原服务器玩家 
                 NetMessage.SendData(7, Index);
+                Player?.Spawn(PlayerSpawnContext.SpawningIntoWorld);
             }
         }
         public void SendDataToForword(byte[] buffer, int start = -1, int size = -1)
         {
             SocketAsyncEventArgs args = new();
             args.SetBuffer(buffer, start == -1 ? 0 : start, size == -1 ? buffer.Length : size);
-            Connection?.Client.SendAsync(args);
+            Connection?.Client?.SendAsync(args);
         }
         public void SendDataToClient(byte[] buffer)
         {
-            Player.SendRawData(buffer);
+            Player?.SendRawData(buffer);
         }
         public void SendDataToForword(RawDataBuilder data) => SendDataToForword(data.GetByteData());
         private void RecieveLoop()
         {
             try
             {
-                TShock.Log.ConsoleInfo($"<MultiSCore> 开始监听并转发 {Player.Name} 的来自远端服务器 {Server.Name} 的数据包");
-                while (Connection is { Connected: true })
+                TShock.Log.ConsoleInfo($"<MultiSCore> 开始监听并转发 {Player.Name} 的与远端服务器 {Server.Name} 交互的数据包");
+                start:
+                while (Connection?.Client is { Connected: true } && Server is { })
                 {
                     int size = Connection.Client.Receive(Buffer);
                     switch (Buffer[2])
                     {
+                        case 2:
+                            using (var reader = new BinaryReader(new MemoryStream(Buffer)))
+                            {
+                                reader.BaseStream.Position = 3L;
+                                Player?.SendInfoMsg($"你已被移出服务器 {Server.Name}: {NetworkText.Deserialize(reader)}");
+                                BackToHost();
+                            }
+                            return;
                         case 3:
-                            ForwordIndex = Buffer[3];
+                            ForwordIndex = Buffer[2];
                             break;
                         case 7:
                             if (!Connected)
@@ -128,20 +141,24 @@ namespace MultiSCore
                         case 15:
                             using (var reader = new BinaryReader(new MemoryStream(Buffer)))
                             {
-                                reader.BaseStream.Position = 4L;
-                                MSCMain.Instance.Server.OnRecieveCustomData(Index, (Utils.CustomPacket)Buffer[3], reader);
+                                var type = (Utils.CustomPacket)Buffer[3];
+                                var args = new MSCHooks.RecieveCustomDataEventArgs(Index, type, reader);
+                                if (!MSCHooks.OnRecieveCustomData(args))
+                                    MSCMain.Instance.Server.OnRecieveCustomData(args);
                             }
-                            break;
+                            goto start;
                     }
-                    Netplay.Clients[Index].Socket.AsyncSend(Buffer, 0, size, delegate { });
+                    if(Buffer != null) Netplay.Clients[Index].Socket.AsyncSend(Buffer, 0, size, delegate { });
                 }
-                TShock.Log.ConsoleInfo($"<MultiSCore> 监听{Player?.Name}结束");
+                TShock.Log.ConsoleInfo($"<MultiSCore> 转发{Player?.Name}结束");
             }
             catch (Exception ex)
             {
-                TShock.Log.ConsoleError(ex.Message);
+                TShock.Log.ConsoleError($"<MultiSCore> Host forwording loop error: {ex}");
+                BackToHost();
+                Player?.SendInfoMsg("由于不可预料的错误, 你已被传送回主服务器");
             }
-            
+
         }
 
         public void Dispose()

@@ -70,6 +70,7 @@
   <ItemGroup>
     <Compile Include="Config.cs" />
     <Compile Include="DataStructs\Chat.cs" />
+    <Compile Include="MSCHooks.cs" />
     <Compile Include="MSCMain.cs" />
     <Compile Include="MSCPlayer.cs" />
     <Compile Include="Core\ForwordServer.cs" />

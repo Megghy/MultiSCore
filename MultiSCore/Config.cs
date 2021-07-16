@@ -9,7 +9,7 @@ namespace MultiSCore
 {
     public class Config
     {
-        public static void Load(ReloadEventArgs args = null)
+        public static void Load()
         {
             try
             {
@@ -24,11 +24,11 @@ namespace MultiSCore
                     }
             }, Formatting.Indented));
                 else MSCMain.Instance.ServerConfig = JsonConvert.DeserializeObject<Config>(File.ReadAllText(path));
-                TShock.Log.ConsoleInfo("<MultiSCore> 成功读取配置文件.");
+                TShock.Log.ConsoleInfo("<MultiSCore> Read config success.");
             }
             catch (Exception ex)
             {
-                TShock.Log.ConsoleError("<MultiSCore> 读取配置文件失败.\r\n" + ex.Message);
+                TShock.Log.ConsoleError("<MultiSCore> Failed to read config: " + ex.Message);
             }
         }
         public struct ForwordServer
