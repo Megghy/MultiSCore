@@ -3,7 +3,6 @@ using Newtonsoft.Json;
 using System;
 using System.IO;
 using System.Net.Sockets;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Terraria;
 using Terraria.GameContent.NetModules;
@@ -25,7 +24,7 @@ namespace MultiSCore
         public Config.ForwordServer Server { get; set; }
         public TcpClient Connection { get; set; }
         public byte[] Buffer { get; set; }
-        public string IP { get; set; } = "";
+        public string Password { get; set; }
         public void Reset()
         {
             ForwordIndex = -1;
@@ -48,19 +47,24 @@ namespace MultiSCore
             {
                 if (server.Name == MSCMain.Instance.Server.Name)
                 {
-                    SendMessage($"<MultiSCore> 你已在服务器 {server.Name} 中");
+                    Player.SendErrorMsg($"你已在服务器 {server.Name} 中");
+                    return;
+                }
+                if (!MSCMain.Instance.IsHost)
+                {
+                    Player.SendErrorMsg($"禁止在 Forword Server 中直接调用 SwitchServer 函数.");
                     return;
                 }
                 if (Connection is { Connected: true }) Connection.Close();
                 NetMessage.SendData(14, -1, Player.Index, null, Index, false.GetHashCode()); //隐藏原服务器玩家
 
                 Connection = new();
-                Buffer = new byte[1024];
+                Buffer = new byte[10240];
                 Server = server;
 
                 Connection.Connect(server.IP, server.Port);
-                SendDataToForword(new RawDataBuilder(1).PackString(server.Key).PackString(Player.IP));  //发起连接请求
-                SendDataToForword(new RawDataBuilder(Utils.CustomPacket.ServerList).PackString(server.Key).PackString(JsonConvert.SerializeObject(MSCMain.Instance.ServerConfig.Servers))); //发送服务器列表
+                SendDataToForword(new RawDataBuilder(1).PackString("MultiSCore" + MSCMain.Instance.Key).PackString(Player.IP));  //发起连接请求
+                SendDataToForword(new RawDataBuilder(Utils.CustomPacket.ServerList).PackString(MSCMain.Instance.Key).PackString(JsonConvert.SerializeObject(MSCMain.Instance.ServerConfig.Servers))); //发送服务器列表
                 Task.Run(RecieveLoop);
             }
             catch (Exception ex)
@@ -71,7 +75,6 @@ namespace MultiSCore
         }
         public void BackToHost()
         {
-
             if (MSCMain.Instance.IsHost)
             {
                 Dispose();
@@ -86,13 +89,15 @@ namespace MultiSCore
                         Netplay.Clients[Index].TileSections[i, j] = false;
                     }
                 }
-                NetMessage.SendData(14, -1, -1, null, Index); //显示原服务器玩家 
+                NetMessage.SendData(14, -1, Index, null, Index, true.GetHashCode()); //显示原服务器玩家 
                 NetMessage.SendData(7, Index);
-                Player?.Spawn(PlayerSpawnContext.SpawningIntoWorld);
+                if (MSCMain.Instance.ServerConfig.RememberLastPoint) Player?.Teleport(Player.X, Player.Y);
+                else Player?.Spawn(PlayerSpawnContext.SpawningIntoWorld);
             }
         }
         public void SendDataToForword(byte[] buffer, int start = -1, int size = -1)
         {
+            if (!MSCMain.Instance.IsHost || (!Connected && buffer[2] > 12 && buffer[2] != 93 && buffer[2] != 16 && buffer[2] != 42 && buffer[2] != 50 && buffer[2] != 38 && buffer[2] != 68 && buffer[2] != 15)) return;
             SocketAsyncEventArgs args = new();
             args.SetBuffer(buffer, start == -1 ? 0 : start, size == -1 ? buffer.Length : size);
             Connection?.Client?.SendAsync(args);
@@ -107,20 +112,24 @@ namespace MultiSCore
             try
             {
                 TShock.Log.ConsoleInfo($"<MultiSCore> 开始监听并转发 {Player.Name} 的与远端服务器 {Server.Name} 交互的数据包");
-                start:
+            start:
                 while (Connection?.Client is { Connected: true } && Server is { })
                 {
                     int size = Connection.Client.Receive(Buffer);
                     switch (Buffer[2])
                     {
                         case 2:
-                            using (var reader = new BinaryReader(new MemoryStream(Buffer)))
+                            try
                             {
-                                reader.BaseStream.Position = 3L;
-                                Player?.SendInfoMsg($"你已被移出服务器 {Server.Name}: {NetworkText.Deserialize(reader)}");
-                                BackToHost();
+                                using (var reader = new BinaryReader(new MemoryStream(Buffer)))
+                                {
+                                    reader.BaseStream.Position = 3L;
+                                    Player?.SendInfoMsg($"你已被移出服务器 {Server.Name}: {NetworkText.Deserialize(reader)}");
+                                    BackToHost();
+                                    return;
+                                }
                             }
-                            return;
+                            catch { break; }
                         case 3:
                             ForwordIndex = Buffer[2];
                             break;
@@ -147,16 +156,28 @@ namespace MultiSCore
                                     MSCMain.Instance.Server.OnRecieveCustomData(args);
                             }
                             goto start;
+                        case 37:
+                            if (string.IsNullOrEmpty(Password))
+                            {
+                                Player.SendErrorMsg($"服务器 {Server.Name} 需要密码, 请输入 /msc password([c/B3CE95:p]) <[c/B3CE95:密码]>");
+                                BackToHost();
+                            }
+                            break;
                     }
-                    if(Buffer != null) Netplay.Clients[Index].Socket.AsyncSend(Buffer, 0, size, delegate { });
+                    if (Buffer != null) Netplay.Clients[Index].Socket.AsyncSend(Buffer, 0, size, delegate { });
                 }
                 TShock.Log.ConsoleInfo($"<MultiSCore> 转发{Player?.Name}结束");
+                if (Connected)
+                {
+                    BackToHost();
+                    Player?.SendInfoMsg("由于不可预料的错误, 你已被传送回主服务器");
+                }
             }
             catch (Exception ex)
             {
-                TShock.Log.ConsoleError($"<MultiSCore> Host forwording loop error: {ex}");
                 BackToHost();
                 Player?.SendInfoMsg("由于不可预料的错误, 你已被传送回主服务器");
+                TShock.Log.ConsoleError($"<MultiSCore> Host forwording loop error: {ex}");
             }
 
         }

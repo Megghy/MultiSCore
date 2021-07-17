@@ -20,7 +20,7 @@ namespace MultiSCore
             Command
         }
         internal static readonly FieldInfo CacheIP = typeof(TSPlayer).GetField("CacheIP", BindingFlags.Instance | BindingFlags.NonPublic);
-        internal static readonly string ServerPrefix = $"<{"MultiSCore".Color("A8D9D0")}> ";
+        internal static readonly string ServerPrefix = $"<[C/A8D9D0:MultiSCore]> ";
         public static void SendSuccessMsg(this TSPlayer tsp, object text, bool playsound = true)
         {
             tsp?.SendMessage(ServerPrefix + text, new Color(120, 194, 96));
@@ -32,7 +32,7 @@ namespace MultiSCore
             tsp?.SendMessage(ServerPrefix + text, new Color(216, 212, 82));
         }
 
-        public static void SendErrorMsg(this TSPlayer tsp, object text, bool playsound = true)
+        public static void SendErrorMsg(this TSPlayer tsp, object text)
         {
             tsp?.SendMessage(ServerPrefix + text, new Color(195, 83, 83));
         }

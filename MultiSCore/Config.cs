@@ -18,9 +18,10 @@ namespace MultiSCore
                     IsHost = true,
                     Key = Guid.NewGuid().ToString(),
                     Name = "host",
+                    RememberLastPoint = true,
                     Servers = new()
                     {
-                        new() { Visible = true, IP = "127.0.0.1", Port = 7776, Key = Guid.NewGuid().ToString(), Name = "game", SpawnX = -1, SpawnY = -1, GlobalCommand = new() { "online", "who" } }
+                        new() { Visible = true, Permission = "", IP = "127.0.0.1", Port = 7776, Name = "game", SpawnX = -1, SpawnY = -1, GlobalCommand = new() { "online", "who" } }
                     }
             }, Formatting.Indented));
                 else MSCMain.Instance.ServerConfig = JsonConvert.DeserializeObject<Config>(File.ReadAllText(path));
@@ -31,12 +32,12 @@ namespace MultiSCore
                 TShock.Log.ConsoleError("<MultiSCore> Failed to read config: " + ex.Message);
             }
         }
-        public struct ForwordServer
+        public class ForwordServer
         {
             public bool Visible { get; set; }
+            public string Permission { get; set; }
             public string IP { get; set; }
             public int Port { get; set; }
-            public string Key { get; set; }
             public string Name { get; set; }
             public int SpawnX { get; set; }
             public int SpawnY { get; set; }
@@ -45,6 +46,7 @@ namespace MultiSCore
         public bool IsHost { get; set; }
         public string Key { get; set; }
         public string Name { get; set; }
+        public bool RememberLastPoint { get; set; }
         public List<ForwordServer> Servers { get; set; }
     }
 }

@@ -28,7 +28,7 @@ namespace MultiSCore.Core
         {
             var index = args.Index;
             
-            if (args.Key != Key)
+            if (args.Key != "MultiSCore" + Key)
             {
                 TShock.Log.ConsoleInfo($"<MultiSCore> 无效的秘钥: {args.Key}");
                 NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral("无效的秘钥"));
@@ -76,9 +76,9 @@ namespace MultiSCore.Core
             try
             {
                 var index = buffer.whoAmI;
-                if ((Netplay.Clients[index].State < 10 && packetid > 12 && packetid != 93 && packetid != 16 && packetid != 42 && packetid != 50 && packetid != 38 && packetid != 68 && packetid != 15 && packetid != 8 && packetid != 12) || (Netplay.Clients[index].State == 0 && packetid != 1 && packetid != 15))
+                if ((Netplay.Clients[index].State < 10 && packetid > 12 && packetid != 93 && packetid != 16 && packetid != 42 && packetid != 50 && packetid != 38 && packetid != 68 && packetid != 15) || (Netplay.Clients[index].State == 0 && packetid != 1 && packetid != 15))
                 {
-                    TShock.Log.ConsoleInfo($"无效的操作 - {(PacketTypes)packetid}, State - {Netplay.Clients[index].State}");
+                    TShock.Log.ConsoleInfo($"当前状态下操作无效 - {(PacketTypes)packetid}, State: {Netplay.Clients[index].State}");
                     return HookResult.Cancel;
                 }
                 using (var reader = new BinaryReader(new MemoryStream(buffer.readBuffer, index, length + 2)))
@@ -109,7 +109,7 @@ namespace MultiSCore.Core
                     }
                 }
             }
-            catch (Exception ex) { TShock.Log.ConsoleError($"<MultiSCore> Forword recieve error: {ex.Message}"); return HookResult.Cancel; }
+            catch (Exception ex) { TShock.Log.ConsoleError($"<MultiSCore> Forword recieve packet error: {ex.Message}"); return HookResult.Cancel; }
         }
         public void OnRecieveCustomData(MSCHooks.RecieveCustomDataEventArgs args)
         {
