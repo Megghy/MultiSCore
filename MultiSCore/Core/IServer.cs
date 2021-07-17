@@ -19,9 +19,10 @@ namespace MultiSCore.Core
         public string Key { get; set; }
         public HookResult OnReceiveData(MessageBuffer buffer, ref byte packetid, ref int readoffset, ref int start, ref int length);
         public void OnRecieveCustomData(MSCHooks.RecieveCustomDataEventArgs args);
-        public void OnSendData(SendBytesEventArgs args);
+        public HookResult OnSendData(ref int remoteClient, ref byte[] data, ref int offset, ref int size, ref SocketSendCallback callback, ref object state);
         public void OnConnectRequest(MSCHooks.PlayerJoinEventArgs args);
         public void OnPlayerLeave(LeaveEventArgs args);
         public void OnPlayerCommand(PlayerCommandEventArgs args);
+        public void OnPlayerFinishSwitch(MSCHooks.PlayerFinishSwitchEventArgs args);
     }
 }

@@ -1,10 +1,8 @@
 ﻿using Microsoft.Xna.Framework;
 using System;
-using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 using Terraria;
 using TShockAPI;
 
@@ -19,6 +17,22 @@ namespace MultiSCore
             Chat,
             Command
         }
+        public static bool TryParseAddress(string address, out string ip)
+        {
+            ip = "";
+            try
+            {
+                IPHostEntry hostinfo = Dns.GetHostEntry(address);
+                if (hostinfo.AddressList.FirstOrDefault() is { } _ip)
+                {
+                    ip = _ip.ToString();
+                    return true;
+                }
+            }
+            catch { }
+            return false;
+        }
+        public static MSCPlayer GetMSCPlayer(this TSPlayer plr) => MSCPlugin.Instance.ForwordPlayers[plr.Index];
         internal static readonly FieldInfo CacheIP = typeof(TSPlayer).GetField("CacheIP", BindingFlags.Instance | BindingFlags.NonPublic);
         internal static readonly string ServerPrefix = $"<[C/A8D9D0:MultiSCore]> ";
         public static void SendSuccessMsg(this TSPlayer tsp, object text, bool playsound = true)

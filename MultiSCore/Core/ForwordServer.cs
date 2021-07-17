@@ -3,11 +3,11 @@ using Newtonsoft.Json;
 using OTAPI;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net;
 using Terraria;
 using Terraria.Localization;
+using Terraria.Net.Sockets;
 using TerrariaApi.Server;
 using TShockAPI;
 using TShockAPI.Hooks;
@@ -23,15 +23,19 @@ namespace MultiSCore.Core
         }
         public string Name { get; set; }
         public string Key { get; set; }
-        public List<Config.ForwordServer> TempServerList { get; set; } = new();
         public void OnConnectRequest(MSCHooks.PlayerJoinEventArgs args)
         {
             var index = args.Index;
-            
-            if (args.Key != "MultiSCore" + Key)
+
+            if (args.Key != Key)
             {
                 TShock.Log.ConsoleInfo($"<MultiSCore> 无效的秘钥: {args.Key}");
                 NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral("无效的秘钥"));
+            }
+            else if (args.Name != Name)
+            {
+                TShock.Log.ConsoleInfo($"<MultiSCore> 不匹配的服务器名: {args.Key}");
+                NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral("不匹配的服务器名"));
             }
             else
             {
@@ -81,32 +85,29 @@ namespace MultiSCore.Core
                     TShock.Log.ConsoleInfo($"当前状态下操作无效 - {(PacketTypes)packetid}, State: {Netplay.Clients[index].State}");
                     return HookResult.Cancel;
                 }
-                using (var reader = new BinaryReader(new MemoryStream(buffer.readBuffer, index, length + 2)))
+
+                var reader = buffer.reader;
+                reader.BaseStream.Position = start + 1;
+                switch (packetid)
                 {
-                    switch (packetid)
-                    {
-                        case 15:
-                            var type = (Utils.CustomPacket)buffer.readBuffer[3];
-                            var args = new MSCHooks.RecieveCustomDataEventArgs(index, type, reader);
-                            if (!MSCHooks.OnRecieveCustomData(args))
-                                OnRecieveCustomData(args);
-                            return HookResult.Cancel;
-                        case 1:
-                            reader.BaseStream.Position = 3L;
-                            var key = reader.ReadString();
-                            if (key.StartsWith("Terraria"))
-                            {
-                                NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral("此服务器不允许直接连接"));
-                            }
-                            else
-                            {
-                                var joinArgs = new MSCHooks.PlayerJoinEventArgs(index, key, reader.ReadString());
-                                if (!MSCHooks.OnPlayerJoin(joinArgs)) OnConnectRequest(joinArgs);
-                            }
-                            return HookResult.Cancel;
-                        default:
-                            return MSCMain.Instance.OldGetDataHandler.Invoke(buffer, ref packetid, ref readoffset, ref start, ref length);
-                    }
+                    case 15:
+                        var type = (Utils.CustomPacket)reader.ReadByte();
+                        if (!MSCHooks.OnRecieveCustomData(index, type, reader, out var recieveArgs))
+                            OnRecieveCustomData(recieveArgs);
+                        return HookResult.Cancel;
+                    case 1:
+                        var key = reader.ReadString();
+                        if (key.StartsWith("Terraria") && !MSCPlugin.Instance.ServerConfig.AllowDirectJoin)
+                        {
+                            NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral("此服务器不允许直接连接"));
+                        }
+                        else
+                        {
+                            if (!MSCHooks.OnPlayerJoin(index, reader.ReadString(), key, reader.ReadString(), out var joinArgs)) OnConnectRequest(joinArgs);
+                        }
+                        return HookResult.Cancel;
+                    default:
+                        return MSCPlugin.Instance.OldGetDataHandler.Invoke(buffer, ref packetid, ref readoffset, ref start, ref length);
                 }
             }
             catch (Exception ex) { TShock.Log.ConsoleError($"<MultiSCore> Forword recieve packet error: {ex.Message}"); return HookResult.Cancel; }
@@ -121,7 +122,14 @@ namespace MultiSCore.Core
                 {
                     case Utils.CustomPacket.ServerList:
                         var key = reader.ReadString();
-                        if (Key == key) TempServerList = JsonConvert.DeserializeObject<List<Config.ForwordServer>>(reader.ReadString());
+                        if (Key == key) plr?.SetData("MultiSCore_ServerList", JsonConvert.DeserializeObject<List<Config.ForwordServer>>(reader.ReadString()));
+                        break;
+                    case Utils.CustomPacket.Command:
+                        var cmd = reader.ReadString();
+                        if (cmd == "MultiSCore_Spawn")
+                            plr?.Spawn(PlayerSpawnContext.SpawningIntoWorld);
+                        else
+                            Commands.HandleCommand(plr, Commands.Specifier + cmd);
                         break;
                 }
             }
@@ -134,7 +142,7 @@ namespace MultiSCore.Core
         {
             try
             {
-                if (args.CommandName == "msc" || (TempServerList?.FirstOrDefault(s => s.Name == Name) is { } server && server.GlobalCommand.Contains(args.CommandName)))
+                if (args.CommandName == "msc" || args.Player.GetData<List<Config.ForwordServer>>("MultiSCore_ServerList") is { Count: > 0 } servers && servers.FirstOrDefault(s => s.Name == Name) is { } server && server.GlobalCommand.Contains(args.CommandName))
                 {
                     args.Player.SendRawData(new RawDataBuilder(Utils.CustomPacket.Command).PackString(args.CommandText).GetByteData());
                     args.Handled = true;
@@ -145,9 +153,14 @@ namespace MultiSCore.Core
                 TShock.Log.ConsoleError($"<MultiSCore> An error occurred when process player command: {ex}");
             }
         }
-        public void OnSendData(SendBytesEventArgs args)
+        public void OnPlayerFinishSwitch(MSCHooks.PlayerFinishSwitchEventArgs args)
         {
-            //连接到的服务器不需要对senddata作出更改 顺着socket发回去就行了
+            Main.npc.ForEach(n => NetMessage.SendData(23, args.Index, -1, null, n.whoAmI));
+        }
+        public HookResult OnSendData(ref int remoteClient, ref byte[] data, ref int offset, ref int size, ref SocketSendCallback callback, ref object state)
+        {
+            if (data[2] == 129 && size < 5 && !MSCHooks.OnPlayerFinishSwitch(remoteClient, out var finishJoinArgs)) MSCPlugin.Instance.Server.OnPlayerFinishSwitch(finishJoinArgs);
+            return HookResult.Continue;  //连接到的服务器不需要对senddata作出更改 顺着socket发回去就行了
         }
     }
 }

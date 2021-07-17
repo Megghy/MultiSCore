@@ -6,6 +6,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using HttpServer;
+using Microsoft.Xna.Framework;
 using Newtonsoft.Json;
 using OTAPI;
 using Terraria;
@@ -32,7 +34,7 @@ namespace MultiSCore.Core
         }
         public void OnPlayerLeave(LeaveEventArgs args)
         {
-            if (MSCMain.Instance.ForwordPlayers[args.Who] is { } mscp)
+            if (MSCPlugin.Instance.ForwordPlayers[args.Who] is { } mscp)
             {
                 mscp.Dispose();
             }
@@ -45,12 +47,12 @@ namespace MultiSCore.Core
                 TShock.Log.ConsoleInfo($"无效的操作 - {(PacketTypes)packetid}");
                 return HookResult.Cancel;
             }
-            if (MSCMain.Instance.ForwordPlayers[buffer.whoAmI] is { } mscp)
+            if (MSCPlugin.Instance.ForwordPlayers[buffer.whoAmI] is { } mscp)
             {
                 mscp.SendDataToForword(buffer.readBuffer, start - 2, length + 2);
                 return HookResult.Cancel;
             }
-            return MSCMain.Instance.OldGetDataHandler.Invoke(buffer, ref packetid, ref readoffset, ref start, ref length);
+            return MSCPlugin.Instance.OldGetDataHandler.Invoke(buffer, ref packetid, ref readoffset, ref start, ref length);
         }
         public void OnRecieveCustomData(MSCHooks.RecieveCustomDataEventArgs args)
         {
@@ -63,6 +65,12 @@ namespace MultiSCore.Core
                     case Utils.CustomPacket.Command:
                         Commands.HandleCommand(plr, Commands.Specifier + reader.ReadString());
                         break;
+                    case Utils.CustomPacket.Chat:
+                        var msg = $"[{plr.GetMSCPlayer().Server.Name}] {reader.ReadString()}: {reader.ReadString()}";
+                        TShock.Players.Where(p => p != null && p.Name != plr.Name).ForEach(p => p.SendMessage(msg, Color.White));
+                        TShock.Log.Info(msg);
+                        Console.WriteLine(msg);
+                        break;
                 }
             }
             catch (Exception ex)
@@ -74,12 +82,21 @@ namespace MultiSCore.Core
         {
             //主机玩家使用命令不用管
         }
-        public void OnSendData(SendBytesEventArgs args)
+        public void OnPlayerFinishSwitch(MSCHooks.PlayerFinishSwitchEventArgs args)
         {
-            if (MSCMain.Instance.ForwordPlayers[args.Socket.Id] is { } mscp && mscp.Server.Name != MSCMain.Instance.Server.Name)
+            if (MSCPlugin.Instance.ForwordPlayers[args.Index] is { } mscp && mscp.Server.SpawnX == -1 && mscp.Server.SpawnY == -1)
             {
-                args.Handled = true;
+                mscp.SendDataToForword(new RawDataBuilder(Utils.CustomPacket.Command).PackString("MultiSCore_Spawn")); //如果没设置出生位置则传送到出生点
+                mscp.SendDataToForword(new RawDataBuilder(Utils.CustomPacket.ServerList).PackString(MSCPlugin.Instance.Key).PackString(JsonConvert.SerializeObject(MSCPlugin.Instance.ServerConfig.Servers))); //发送服务器列表
             }
+        }
+        public HookResult OnSendData(ref int remoteClient, ref byte[] data, ref int offset, ref int size, ref SocketSendCallback callback, ref object state)
+        {
+            if (MSCPlugin.Instance.ForwordPlayers[remoteClient] is { } mscp && mscp.Server.Name != MSCPlugin.Instance.Server.Name)
+            {
+                return HookResult.Cancel;
+            }
+            return HookResult.Continue;
         }
     }
 }

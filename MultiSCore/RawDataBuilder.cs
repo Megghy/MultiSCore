@@ -35,7 +35,7 @@ namespace MultiSCore
             long position = writer.BaseStream.Position;
             writer.BaseStream.Position = 2L;
             writer.Write((byte)15);
-            PackByte((byte)packetType);
+            writer.Write((byte)packetType);
             writer.BaseStream.Position = position;
         }
 

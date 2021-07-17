@@ -19,12 +19,13 @@ namespace MultiSCore
                     Key = Guid.NewGuid().ToString(),
                     Name = "host",
                     RememberLastPoint = true,
+                    AllowDirectJoin = false,
                     Servers = new()
                     {
                         new() { Visible = true, Permission = "", IP = "127.0.0.1", Port = 7776, Name = "game", SpawnX = -1, SpawnY = -1, GlobalCommand = new() { "online", "who" } }
                     }
             }, Formatting.Indented));
-                else MSCMain.Instance.ServerConfig = JsonConvert.DeserializeObject<Config>(File.ReadAllText(path));
+                else MSCPlugin.Instance.ServerConfig = JsonConvert.DeserializeObject<Config>(File.ReadAllText(path));
                 TShock.Log.ConsoleInfo("<MultiSCore> Read config success.");
             }
             catch (Exception ex)
@@ -47,6 +48,7 @@ namespace MultiSCore
         public string Key { get; set; }
         public string Name { get; set; }
         public bool RememberLastPoint { get; set; }
+        public bool AllowDirectJoin { get; set; }
         public List<ForwordServer> Servers { get; set; }
     }
 }

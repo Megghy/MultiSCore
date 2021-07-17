@@ -70,7 +70,7 @@
   <ItemGroup>
     <Compile Include="Config.cs" />
     <Compile Include="MSCHooks.cs" />
-    <Compile Include="MSCMain.cs" />
+    <Compile Include="MSCPlugin.cs" />
     <Compile Include="MSCPlayer.cs" />
     <Compile Include="Core\ForwordServer.cs" />
     <Compile Include="Core\HostServer.cs" />

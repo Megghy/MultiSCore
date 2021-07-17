@@ -14,39 +14,46 @@ using TShockAPI.Hooks;
 namespace MultiSCore
 {
     [ApiVersion(2, 1)]
-    public class MSCMain : TerrariaPlugin
+    public class MSCPlugin : TerrariaPlugin
     {
-        public MSCMain(Main game) : base(game) { Instance = this; }
+        public MSCPlugin(Main game) : base(game) { Instance = this; }
         public override string Name => "MultiSCore";
         public override string Author => "Megghy";
         public override string Description => "一个简单的跨服传送插件";
         public override Version Version => Assembly.GetExecutingAssembly().GetName().Version;
         public override void Initialize()
         {
-            Config.Load();
-            if (ServerConfig.IsHost)
-            {
-                Server = new HostServer(ServerConfig.Name, ServerConfig.Key);
-                IsHost = true;
-            }
+            if (TShock.VersionNum < new Version(1, 4, 2, 0)) TShock.Log.ConsoleInfo("<MultiSCore> TShock版本低于1.4.2.0, 插件将不会进行加载");
             else
             {
-                Server = new ForwordServer(ServerConfig.Name, ServerConfig.Key);
-                IsHost = false;
-            }
+                Config.Load();
+                if (ServerConfig.IsHost)
+                {
+                    Server = new HostServer(ServerConfig.Name, ServerConfig.Key);
+                    ServerApi.Hooks.ServerLeave.Register(this, Server.OnPlayerLeave, int.MaxValue);
+                    IsHost = true;
+                }
+                else
+                {
+                    Server = new ForwordServer(ServerConfig.Name, ServerConfig.Key);
+                    IsHost = false;
+                    PlayerHooks.PlayerChat += (chat) =>
+                    {
+                        chat.Player.SendRawData(new RawDataBuilder(Utils.CustomPacket.Chat).PackString(chat.Player.Name).PackString(chat.RawText).GetByteData());
+                    };
+                }
 
-            OldGetDataHandler = Hooks.Net.ReceiveData;
-            Hooks.Net.ReceiveData = Server.OnReceiveData;
+                OldGetDataHandler = Hooks.Net.ReceiveData;
+                Hooks.Net.ReceiveData = Server.OnReceiveData;
+                Hooks.Net.SendBytes += Server.OnSendData;
 
-            ServerApi.Hooks.NetSendBytes.Register(this, Server.OnSendData, int.MaxValue);
-            ServerApi.Hooks.ServerLeave.Register(this, Server.OnPlayerLeave, int.MaxValue);
+                GeneralHooks.ReloadEvent += OnReload;
+                PlayerHooks.PlayerCommand += Server.OnPlayerCommand;
 
-            TShockAPI.Hooks.GeneralHooks.ReloadEvent += OnReload;
-            TShockAPI.Hooks.PlayerHooks.PlayerCommand += Server.OnPlayerCommand;
-
-            Commands.ChatCommands.Add(new("msc.use", OnCommand, "msc"));
+                Commands.ChatCommands.Add(new("msc.use", OnCommand, "msc"));
+            }       
         }
-        public static MSCMain Instance;
+        public static MSCPlugin Instance;
         public bool IsHost;
         public Config ServerConfig = new();
         public IServer Server;
@@ -72,6 +79,11 @@ namespace MultiSCore
         }
         void OnCommand(CommandArgs args)
         {
+            if (!IsHost)
+            {
+                args.Player.SendErrorMsg($"副服务器无法使用此命令");
+                return;
+            }
             var plr = args.Player;
             var cmd = args.Parameters;
             var mscp = Instance.ForwordPlayers[plr.Index];
@@ -132,9 +144,13 @@ namespace MultiSCore
                         }
                         else plr.SendInfoMsg($"你尚未进入任何服务器");
                         break;
+                    default:
+                        sendHelpText();
+                        break;
                 }
             }
-            else
+            else sendHelpText();
+            void sendHelpText()
             {
                 plr.SendErrorMsg($"无效的命令.\r\n" +
                     $"/msc tp([c/B3CE95:t]) <[c/B3CE95:服务器名]>  --  传送到指定服务器\r\n" +
