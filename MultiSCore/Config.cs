@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.IO;
 using TShockAPI;
@@ -19,13 +20,19 @@ namespace MultiSCore
                     Key = Guid.NewGuid().ToString(),
                     Name = "host",
                     RememberLastPoint = true,
-                    AllowDirectJoin = false,
+                    AllowDirectJoin = true,
                     Servers = new()
                     {
-                        new() { Visible = true, Permission = "", IP = "127.0.0.1", Port = 7776, Name = "game", SpawnX = -1, SpawnY = -1, GlobalCommand = new() { "online", "who" } }
+                        new() { Key = "1145141919810", Visible = true, Permission = "", IP = "yfeil.top", Port = 7777, Name = "yfeil", SpawnX = -1, SpawnY = -1, GlobalCommand = new() { "online", "who" } }
                     }
             }, Formatting.Indented));
                 else MSCPlugin.Instance.ServerConfig = JsonConvert.DeserializeObject<Config>(File.ReadAllText(path));
+                if (MSCPlugin.Instance.ServerConfig.Servers.Any(s => s.Key.StartsWith("Terraria")))
+                {
+                    TShock.Log.ConsoleInfo("<MultiSCore> 服务器秘钥禁止使用Terraria开头");
+                    Console.ReadKey();
+                    Environment.Exit(0);
+                }
                 TShock.Log.ConsoleInfo("<MultiSCore> Read config success.");
             }
             catch (Exception ex)
@@ -35,6 +42,7 @@ namespace MultiSCore
         }
         public class ForwordServer
         {
+            public string Key { get; set; }
             public bool Visible { get; set; }
             public string Permission { get; set; }
             public string IP { get; set; }
@@ -42,7 +50,7 @@ namespace MultiSCore
             public string Name { get; set; }
             public int SpawnX { get; set; }
             public int SpawnY { get; set; }
-            public List<string> GlobalCommand { get; set; }
+            public List<string> GlobalCommand { get; set; } = new();
         }
         public bool IsHost { get; set; }
         public string Key { get; set; }

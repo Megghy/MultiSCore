@@ -1,5 +1,6 @@
 ﻿using Microsoft.Xna.Framework;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Reflection;
@@ -12,6 +13,7 @@ namespace MultiSCore
     {
         public enum CustomPacket
         {
+            ConnectSuccess,
             SendPlayerIP,
             ServerList,
             Chat,
@@ -34,6 +36,18 @@ namespace MultiSCore
         }
         public static MSCPlayer GetMSCPlayer(this TSPlayer plr) => MSCPlugin.Instance.ForwordPlayers[plr.Index];
         internal static readonly FieldInfo CacheIP = typeof(TSPlayer).GetField("CacheIP", BindingFlags.Instance | BindingFlags.NonPublic);
+        /// <summary>
+        /// 检查命令是否可以使用
+        /// </summary>
+        /// <param name="plr"></param>
+        /// <returns></returns>
+        public static bool CheckCommand(this TSPlayer plr, string cmdName)
+        {
+            if (plr.GetData<List<Config.ForwordServer>>("MultiSCore_ServerList") is { } servers && (cmdName == "msc" || (servers.FirstOrDefault(s => s.Name == MSCPlugin.Instance.Server.Name) is { } server && server.GlobalCommand.Contains(cmdName))))
+                return false;
+            else
+                return true;
+        }
         internal static readonly string ServerPrefix = $"<[C/A8D9D0:MultiSCore]> ";
         public static void SendSuccessMsg(this TSPlayer tsp, object text, bool playsound = true)
         {

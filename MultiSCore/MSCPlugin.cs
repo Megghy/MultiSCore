@@ -25,38 +25,40 @@ namespace MultiSCore
         {
             if (TShock.VersionNum < new Version(1, 4, 2, 0)) TShock.Log.ConsoleInfo("<MultiSCore> TShock版本低于1.4.2.0, 插件将不会进行加载");
             else
+                ServerApi.Hooks.GamePostInitialize.Register(this, OnPostInit);
+        }
+        void OnPostInit(EventArgs args)
+        {
+            Config.Load();
+            if (ServerConfig.IsHost)
             {
-                Config.Load();
-                if (ServerConfig.IsHost)
+                Server = new HostServer(ServerConfig.Name, ServerConfig.Key);
+                ServerApi.Hooks.ServerLeave.Register(this, Server.OnPlayerLeave, int.MaxValue);
+                IsHost = true;
+            }
+            else
+            {
+                Server = new ForwordServer(ServerConfig.Name, ServerConfig.Key);
+                IsHost = false;
+                PlayerHooks.PlayerChat += (chat) =>
                 {
-                    Server = new HostServer(ServerConfig.Name, ServerConfig.Key);
-                    ServerApi.Hooks.ServerLeave.Register(this, Server.OnPlayerLeave, int.MaxValue);
-                    IsHost = true;
-                }
-                else
-                {
-                    Server = new ForwordServer(ServerConfig.Name, ServerConfig.Key);
-                    IsHost = false;
-                    PlayerHooks.PlayerChat += (chat) =>
-                    {
-                        chat.Player.SendRawData(new RawDataBuilder(Utils.CustomPacket.Chat).PackString(chat.Player.Name).PackString(chat.RawText).GetByteData());
-                    };
-                }
+                    chat.Player.SendRawData(new RawDataBuilder(Utils.CustomPacket.Chat).PackString(Server.Key).PackString(chat.Player.Name).PackString(chat.RawText).GetByteData());
+                };
+            }
 
-                OldGetDataHandler = Hooks.Net.ReceiveData;
-                Hooks.Net.ReceiveData = Server.OnReceiveData;
-                Hooks.Net.SendBytes += Server.OnSendData;
+            OldGetDataHandler = Hooks.Net.ReceiveData;
+            Hooks.Net.ReceiveData = Server.OnReceiveData;
+            Hooks.Net.SendBytes += Server.OnSendData;
 
-                GeneralHooks.ReloadEvent += OnReload;
-                PlayerHooks.PlayerCommand += Server.OnPlayerCommand;
+            GeneralHooks.ReloadEvent += OnReload;
+            PlayerHooks.PlayerCommand += Server.OnPlayerCommand;
 
-                Commands.ChatCommands.Add(new("msc.use", OnCommand, "msc"));
-            }       
+            Commands.ChatCommands.Add(new("msc.use", OnCommand, "msc"));
         }
         public static MSCPlugin Instance;
         public bool IsHost;
         public Config ServerConfig = new();
-        public IServer Server;
+        public ServerBase Server;
         public string Key => Server.Key;
         internal Hooks.Net.ReceiveDataHandler OldGetDataHandler;
         public MSCPlayer[] ForwordPlayers = new MSCPlayer[256];

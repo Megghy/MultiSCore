@@ -25,11 +25,12 @@ namespace MultiSCore
         public TcpClient Connection { get; set; }
         public byte[] Buffer { get; set; }
         public string Password { get; set; }
+        public string Key => Server?.Key ?? MSCPlugin.Instance.Key;
         public void Reset()
         {
             ForwordIndex = -1;
-            Server = new();
-            Connection?.Client?.Shutdown(SocketShutdown.Both);
+            Server = null;
+            if((bool)(Connection?.Client.Connected)) Connection?.Client?.Shutdown(SocketShutdown.Both);
             Connection?.Client?.Close();
             Connection?.Close();
             Connection = null;
@@ -62,7 +63,7 @@ namespace MultiSCore
 
                                 NetMessage.SendData(14, -1, Player.Index, null, Index, false.GetHashCode()); //隐藏原服务器玩家
 
-                                SendDataToForword(new RawDataBuilder(1).PackString(MSCPlugin.Instance.Key).PackString(server.Name).PackString(Player.IP));  //发起连接请求
+                                SendDataToForword(new RawDataBuilder(1).PackString(Key).PackString(server.Name).PackString(Player.IP));  //发起连接请求
                                 
                                 Task.Run(RecieveLoop);
                             }
@@ -203,8 +204,8 @@ namespace MultiSCore
 
         public void Dispose()
         {
-            Reset();
             MSCPlugin.Instance.ForwordPlayers[Index] = null;
+            Reset();
         }
     }
 }
