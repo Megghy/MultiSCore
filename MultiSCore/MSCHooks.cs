@@ -12,18 +12,20 @@ namespace MultiSCore
     {
         public struct PlayerJoinEventArgs
         {
-            public PlayerJoinEventArgs(int index,string name, string key, string ip)
+            public PlayerJoinEventArgs(int index,string name, string key, string ip, string version)
             {
                 Handled = false;
                 Index = index;
                 Name = name;
                 Key = key;
                 IP = ip;
+                Version = Version.Parse(version);
             }
             public int Index { get; internal set; }
             public string Name { get; internal set; }
             public string Key { get; internal set; }
             public string IP { get; internal set; }
+            public Version Version { get; set; }
             public bool Handled { get; set; }
         }
         public struct RecieveCustomDataEventArgs
@@ -58,16 +60,16 @@ namespace MultiSCore
         public static event RecieveCustomDataEvent RecieveCustomData;
         public delegate void PlayerFinishSwitchEvent(PlayerFinishSwitchEventArgs args);
         public static event PlayerFinishSwitchEvent PlayerFinishJoin;
-        internal static bool OnPlayerJoin(int index, string name, string key, string ip, out PlayerJoinEventArgs args)
+        internal static bool OnPlayerJoin(int index, string name, string key, string ip, string version, out PlayerJoinEventArgs args)
         {
-            args = new(index, name, key, ip);
+            args = new(index, name, key, ip, version);
             PlayerJoin?.Invoke(args);
             return args.Handled;
         }
 
         internal static bool OnRecieveCustomData(int index, Utils.CustomPacket type, BinaryReader reader, out RecieveCustomDataEventArgs args)
         {
-            var position = MSCPlugin.Instance.IsHost ? 4L : reader.BaseStream.Position;
+            var position = reader.BaseStream.Position;
             args = new(index, type, reader);
             RecieveCustomData?.Invoke(args);
             args.Reader.BaseStream.Position = position;

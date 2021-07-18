@@ -53,13 +53,18 @@ namespace MultiSCore
             GeneralHooks.ReloadEvent += OnReload;
             PlayerHooks.PlayerCommand += Server.OnPlayerCommand;
 
+            ServerApi.Hooks.ServerJoin.Register(this, (join) => {
+                var data = new RawDataBuilder(Utils.CustomPacket.ConnectSuccess).PackString(Key).GetByteData();
+                Netplay.Clients[join.Who].Socket.AsyncSend(data, 0, data.Length, delegate { });
+            });
+
             Commands.ChatCommands.Add(new("msc.use", OnCommand, "msc"));
         }
         public static MSCPlugin Instance;
         public bool IsHost;
         public Config ServerConfig = new();
         public ServerBase Server;
-        public string Key => Server.Key;
+        public static string Key => Instance.Server.Key;
         internal Hooks.Net.ReceiveDataHandler OldGetDataHandler;
         public MSCPlayer[] ForwordPlayers = new MSCPlayer[256];
         void OnReload(ReloadEventArgs args)
@@ -71,7 +76,7 @@ namespace MultiSCore
             {
                 var temp = new List<string>();
                 var list = ForwordPlayers.Where(p => p is { }).ToList();
-                var data = new RawDataBuilder(Utils.CustomPacket.ServerList).PackString(Key).PackString(JsonConvert.SerializeObject(ServerConfig.Servers));
+                var data = new RawDataBuilder(Utils.CustomPacket.ServerList).PackString(Key).PackString(JsonConvert.SerializeObject(ServerConfig));
                 list.ForEach(p =>
                 {
                     if (!temp.Contains(p.Server.Name))
@@ -86,6 +91,7 @@ namespace MultiSCore
                 args.Player.SendErrorMsg($"副服务器无法使用此命令");
                 return;
             }
+            
             var plr = args.Player;
             var cmd = args.Parameters;
             var mscp = Instance.ForwordPlayers[plr.Index];
@@ -104,15 +110,15 @@ namespace MultiSCore
                                 else
                                 {
                                     if (mscp != null && mscp.Server.Name == server.Name)
-                                    {
                                         plr.SendErrorMsg($"你已处于服务器 {server.Name} 中");
-                                        return;
+                                    else
+                                    {
+                                        plr.SendInfoMsg($"正在传送至服务器 {server.Name}");
+                                        TShock.Log.ConsoleInfo($"<MultiSCore> 玩家 {plr.Name} 准备传送至服务器 {server.Name}");
+                                        mscp?.Dispose();
+                                        ForwordPlayers[plr.Index] = new(plr.Index);
+                                        ForwordPlayers[plr.Index].SwitchServer(server);
                                     }
-                                    plr.SendInfoMsg($"正在传送至服务器 {server.Name}");
-                                    TShock.Log.ConsoleInfo($"<MultiSCore> 玩家 {plr.Name} 传送至服务器 {server.Name}");
-                                    mscp?.Dispose();
-                                    ForwordPlayers[plr.Index] = new(plr.Index);
-                                    ForwordPlayers[plr.Index].SwitchServer(server);
                                 }
                             }
                             else plr.SendErrorMsg($"未找到含有关键词 {cmd[1]} 的服务器");

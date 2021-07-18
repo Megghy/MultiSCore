@@ -43,11 +43,12 @@ namespace MultiSCore
         /// <returns></returns>
         public static bool CheckCommand(this TSPlayer plr, string cmdName)
         {
-            if (plr.GetData<List<Config.ForwordServer>>("MultiSCore_ServerList") is { } servers && (cmdName == "msc" || (servers.FirstOrDefault(s => s.Name == MSCPlugin.Instance.Server.Name) is { } server && server.GlobalCommand.Contains(cmdName))))
+            if (plr.GetServerInfo() is { } info && (cmdName == "msc" || (info.Servers.FirstOrDefault(s => s.Name == MSCPlugin.Instance.Server.Name) is { } server && server.GlobalCommand.Contains(cmdName))))
                 return false;
             else
                 return true;
         }
+        public static Config GetServerInfo(this TSPlayer plr) => plr.GetData<Config>("MultiSCore_ServerInfo");
         internal static readonly string ServerPrefix = $"<[C/A8D9D0:MultiSCore]> ";
         public static void SendSuccessMsg(this TSPlayer tsp, object text, bool playsound = true)
         {

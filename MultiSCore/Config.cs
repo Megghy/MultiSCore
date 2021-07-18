@@ -31,7 +31,6 @@ namespace MultiSCore
                 {
                     TShock.Log.ConsoleInfo("<MultiSCore> 服务器秘钥禁止使用Terraria开头");
                     Console.ReadKey();
-                    Environment.Exit(0);
                 }
                 TShock.Log.ConsoleInfo("<MultiSCore> Read config success.");
             }

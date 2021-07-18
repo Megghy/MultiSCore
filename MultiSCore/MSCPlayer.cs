@@ -25,9 +25,11 @@ namespace MultiSCore
         public TcpClient Connection { get; set; }
         public byte[] Buffer { get; set; }
         public string Password { get; set; }
-        public string Key => Server?.Key ?? MSCPlugin.Instance.Key;
+        public string Key => Server?.Key ?? MSCPlugin.Key;
+        internal bool ShouldStop = false;
         public void Reset()
         {
+            ShouldStop = true;
             ForwordIndex = -1;
             Server = null;
             if((bool)(Connection?.Client.Connected)) Connection?.Client?.Shutdown(SocketShutdown.Both);
@@ -52,7 +54,7 @@ namespace MultiSCore
                     {
                         if (Utils.TryParseAddress(server.IP, out var ip))
                         {
-                            if (Connection is { Connected: true }) Connection.Close();
+                            if (Connection is { }) Connection.Close();
                             try
                             {
                                 Connection = new();
@@ -63,7 +65,7 @@ namespace MultiSCore
 
                                 NetMessage.SendData(14, -1, Player.Index, null, Index, false.GetHashCode()); //隐藏原服务器玩家
 
-                                SendDataToForword(new RawDataBuilder(1).PackString(Key).PackString(server.Name).PackString(Player.IP));  //发起连接请求
+                                SendDataToForword(new RawDataBuilder(1).PackString(Key).PackString(server.Name).PackString(Player.IP).PackString(MSCPlugin.Instance.Version.ToString()));  //发起连接请求
                                 
                                 Task.Run(RecieveLoop);
                             }
@@ -91,30 +93,27 @@ namespace MultiSCore
         }
         public void BackToHost()
         {
-            Task.Run(() =>
+            if (MSCPlugin.Instance.IsHost)
             {
-                if (MSCPlugin.Instance.IsHost)
+                Dispose();
+                int sectionX = Netplay.GetSectionX(0);
+                int sectionX2 = Netplay.GetSectionX(Main.maxTilesX);
+                int sectionX3 = Netplay.GetSectionX(0);
+                int sectionX4 = Netplay.GetSectionX(Main.maxTilesY);
+                for (int i = sectionX; i <= sectionX2; i++)
                 {
-                    Dispose();
-                    int sectionX = Netplay.GetSectionX(0);
-                    int sectionX2 = Netplay.GetSectionX(Main.maxTilesX);
-                    int sectionX3 = Netplay.GetSectionX(0);
-                    int sectionX4 = Netplay.GetSectionX(Main.maxTilesY);
-                    for (int i = sectionX; i <= sectionX2; i++)
+                    for (int j = sectionX3; j <= sectionX4; j++)
                     {
-                        for (int j = sectionX3; j <= sectionX4; j++)
-                        {
-                            Netplay.Clients[Index].TileSections[i, j] = false;
-                        }
+                        Netplay.Clients[Index].TileSections[i, j] = false;
                     }
-                    NetMessage.SendData(14, -1, Index, null, Index, true.GetHashCode()); //显示原服务器玩家 
-                    NetMessage.SendData(7, Index);
-                    Main.npc.ForEach(n => NetMessage.SendData(23, Index, -1, null, n.whoAmI));
-                    Player?.SendServerCharacter();
-                    if (MSCPlugin.Instance.ServerConfig.RememberLastPoint) Player?.Teleport(Player.X, Player.Y);
-                    else Player?.Spawn(PlayerSpawnContext.SpawningIntoWorld);
                 }
-            });
+                NetMessage.SendData(14, -1, Index, null, Index, true.GetHashCode()); //显示原服务器玩家 
+                NetMessage.SendData(7, Index);
+                Main.npc.ForEach(n => NetMessage.SendData(23, Index, -1, null, n.whoAmI));
+                Player?.SendServerCharacter();
+                if (MSCPlugin.Instance.ServerConfig.RememberLastPoint) Player?.Teleport(Player.X, Player.Y);
+                else Player?.Spawn(PlayerSpawnContext.SpawningIntoWorld);
+            }
         }
         public void SendDataToForword(byte[] buffer, int start = -1, int size = -1)
         {
@@ -133,7 +132,7 @@ namespace MultiSCore
             try
             {
             start:
-                while (Connection?.Client is { Connected: true } && Server is { })
+                while (Connection?.Client is { Connected: true } && Server is { } && !ShouldStop)
                 {
                     int size = Connection.Client.Receive(Buffer);
                     switch (Buffer[2])
@@ -144,7 +143,9 @@ namespace MultiSCore
                                 using (var reader = new BinaryReader(new MemoryStream(Buffer)))
                                 {
                                     reader.BaseStream.Position = 3L;
-                                    Player?.SendInfoMsg($"你已被移出服务器 {Server.Name}: {NetworkText.Deserialize(reader)}");
+                                    var reason = NetworkText.Deserialize(reader);
+                                    Player?.SendInfoMsg($"你已被移出服务器 {Server.Name}: {reason}");
+                                    TShock.Log.ConsoleInfo($"<MultiSCore> {Player?.Name} 被移出服务器 {Server.Name}: {reason}");
                                     BackToHost();
                                     return;
                                 }
@@ -171,6 +172,7 @@ namespace MultiSCore
                             using (var reader = new BinaryReader(new MemoryStream(Buffer)))
                             {
                                 var type = (Utils.CustomPacket)Buffer[3];
+                                reader.BaseStream.Position = 4L;
                                 if (!MSCHooks.OnRecieveCustomData(Index, type, reader, out var recieveArgs))
                                     MSCPlugin.Instance.Server.OnRecieveCustomData(recieveArgs);
                             }
@@ -183,15 +185,9 @@ namespace MultiSCore
                                 break;
                             }
                             goto start;
-                        case 129:
-                            if (!MSCHooks.OnPlayerFinishSwitch(Index, out var finishJoinArgs)) MSCPlugin.Instance.Server.OnPlayerFinishSwitch(finishJoinArgs);
-                            break;
                     }
                     if (Buffer != null && size != 0 && Netplay.Clients[Index].Socket.IsConnected()) Netplay.Clients[Index].Socket?.AsyncSend(Buffer, 0, size, delegate { });
                 }
-                if (Connected)
-                    Player?.SendInfoMsg("由于不可预料的错误, 你已被传送回主服务器");
-                BackToHost();
             }
             catch (Exception ex)
             {
