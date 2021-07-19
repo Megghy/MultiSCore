@@ -1,10 +1,9 @@
 ﻿using Newtonsoft.Json;
 using System;
-using System.Linq;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using TShockAPI;
-using TShockAPI.Hooks;
 
 namespace MultiSCore
 {
@@ -15,17 +14,18 @@ namespace MultiSCore
             try
             {
                 var path = Path.Combine(TShock.SavePath, "MSCConfig.json");
-                if (!File.Exists(path)) FileTools.CreateIfNot(path, JsonConvert.SerializeObject(new Config() { 
-                    IsHost = true,
+                if (!File.Exists(path)) FileTools.CreateIfNot(path, JsonConvert.SerializeObject(new Config()
+                {
+                    AllowDirectJoin = true,
+                    AllowOthorServerJoin = false,
                     Key = Guid.NewGuid().ToString(),
                     Name = "host",
                     RememberLastPoint = true,
-                    AllowDirectJoin = true,
                     Servers = new()
                     {
                         new() { Key = "1145141919810", Visible = true, Permission = "", IP = "yfeil.top", Port = 7777, Name = "yfeil", SpawnX = -1, SpawnY = -1, GlobalCommand = new() { "online", "who" } }
                     }
-            }, Formatting.Indented));
+                }, Formatting.Indented));
                 else MSCPlugin.Instance.ServerConfig = JsonConvert.DeserializeObject<Config>(File.ReadAllText(path));
                 if (MSCPlugin.Instance.ServerConfig.Servers.Any(s => s.Key.StartsWith("Terraria")))
                 {
@@ -51,11 +51,11 @@ namespace MultiSCore
             public int SpawnY { get; set; }
             public List<string> GlobalCommand { get; set; } = new();
         }
-        public bool IsHost { get; set; }
+        public bool AllowOthorServerJoin { get; set; }
+        public bool AllowDirectJoin { get; set; }
         public string Key { get; set; }
         public string Name { get; set; }
         public bool RememberLastPoint { get; set; }
-        public bool AllowDirectJoin { get; set; }
         public List<ForwordServer> Servers { get; set; }
     }
 }

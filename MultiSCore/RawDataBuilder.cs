@@ -27,7 +27,12 @@ namespace MultiSCore
             writer.Write((byte)packetType);
             writer.BaseStream.Position = position;
         }
-        public RawDataBuilder(Utils.CustomPacket packetType)
+        /// <summary>
+        /// 请使用 Utils 类中的 GetCustomRawData 来获取, 不然还得输key
+        /// </summary>
+        /// <param name="packetType"></param>
+        /// <param name="key"></param>
+        public RawDataBuilder(Utils.CustomPacket packetType, string key)
         {
             memoryStream = new();
             writer = new(memoryStream);
@@ -37,6 +42,7 @@ namespace MultiSCore
             writer.Write((byte)15);
             writer.Write((byte)packetType);
             writer.BaseStream.Position = position;
+            PackString(key);
         }
 
         public RawDataBuilder SetType(PacketTypes type)

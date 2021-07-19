@@ -30,21 +30,10 @@ namespace MultiSCore
         void OnPostInit(EventArgs args)
         {
             Config.Load();
-            if (ServerConfig.IsHost)
-            {
-                Server = new HostServer(ServerConfig.Name, ServerConfig.Key);
-                ServerApi.Hooks.ServerLeave.Register(this, Server.OnPlayerLeave, int.MaxValue);
-                IsHost = true;
-            }
-            else
-            {
-                Server = new ForwordServer(ServerConfig.Name, ServerConfig.Key);
-                IsHost = false;
-                PlayerHooks.PlayerChat += (chat) =>
-                {
-                    chat.Player.SendRawData(new RawDataBuilder(Utils.CustomPacket.Chat).PackString(Server.Key).PackString(chat.Player.Name).PackString(chat.RawText).GetByteData());
-                };
-            }
+
+            Server = new(ServerConfig.Name, ServerConfig.Key);
+
+            PlayerHooks.PlayerChat += Server.OnPlayerChat;
 
             OldGetDataHandler = Hooks.Net.ReceiveData;
             Hooks.Net.ReceiveData = Server.OnReceiveData;
@@ -54,44 +43,45 @@ namespace MultiSCore
             PlayerHooks.PlayerCommand += Server.OnPlayerCommand;
 
             ServerApi.Hooks.ServerJoin.Register(this, (join) => {
-                var data = new RawDataBuilder(Utils.CustomPacket.ConnectSuccess).PackString(Key).GetByteData();
+                var data = Utils.GetCustomRawData(join.Who, Utils.CustomPacket.ConnectSuccess).GetByteData();
                 Netplay.Clients[join.Who].Socket.AsyncSend(data, 0, data.Length, delegate { });
             });
+            ServerApi.Hooks.ServerLeave.Register(this, Server.OnPlayerLeave, int.MaxValue);
 
-            Commands.ChatCommands.Add(new("msc.use", OnCommand, "msc"));
+            Commands.ChatCommands.Add(new("msc.use", OnCommand, "msc") { AllowServer = false });
         }
         public static MSCPlugin Instance;
-        public bool IsHost;
         public Config ServerConfig = new();
-        public ServerBase Server;
+        public ServerAdapter Server;
         public static string Key => Instance.Server.Key;
         internal Hooks.Net.ReceiveDataHandler OldGetDataHandler;
+        /// <summary>
+        /// 使用反代前往其他服务器的玩家
+        /// </summary>
         public MSCPlayer[] ForwordPlayers = new MSCPlayer[256];
+        /// <summary>
+        /// 使用反代进入此服务器的玩家
+        /// </summary>
+        public Config[] ForwordInfo = new Config[256];
         void OnReload(ReloadEventArgs args)
         {
             Config.Load();
             Server.Key = ServerConfig.Key;
             Server.Name = ServerConfig.Name;
-            if (IsHost)
+            var temp = new List<string>();
+            ForwordPlayers.Where(p => p is { }).ForEach(p =>
             {
-                var temp = new List<string>();
-                var list = ForwordPlayers.Where(p => p is { }).ToList();
-                var data = new RawDataBuilder(Utils.CustomPacket.ServerList).PackString(Key).PackString(JsonConvert.SerializeObject(ServerConfig));
-                list.ForEach(p =>
-                {
-                    if (!temp.Contains(p.Server.Name))
-                    { temp.Add(p.Server.Name); p.SendDataToForword(data); }
-                });
-            }
+                if (!temp.Contains(p.Server.Name))
+                { temp.Add(p.Server.Name); p.SendDataToForword(p.GetCustomRawData(Utils.CustomPacket.ServerInfo).PackString(JsonConvert.SerializeObject(ServerConfig))); }
+            });
         }
         void OnCommand(CommandArgs args)
         {
-            if (!IsHost)
+            if (args.Player.IsForwordPlayer())
             {
-                args.Player.SendErrorMsg($"副服务器无法使用此命令");
+                args.Player.SendErrorMsg($"无法在此环境中使用 MultiSCore 命令");
                 return;
             }
-            
             var plr = args.Player;
             var cmd = args.Parameters;
             var mscp = Instance.ForwordPlayers[plr.Index];
@@ -101,9 +91,14 @@ namespace MultiSCore
                 {
                     case "tp":
                     case "t":
+                        if(plr.GetData<string>("MultiSCore_Switching") is { })
+                        {
+                            plr.SendErrorMsg($"正在跳转中, 请勿使用此命令");
+                            return;
+                        }
                         if (cmd.Count > 1)
                         {
-                            if (Instance.ServerConfig.Servers.FirstOrDefault(s => s.Name.ToLower().Contains(cmd[1])) is { } server)
+                            if (Instance.ServerConfig.Servers.FirstOrDefault(s => s.Name == cmd[1] || s.Name.ToLower().Contains(cmd[1])) is { } server)
                             {
                                 if (!string.IsNullOrEmpty(server.Permission) && plr.HasPermission(server.Permission))
                                     plr.SendErrorMsg($"你没有权限进入服务器 {server.Name}");
@@ -113,11 +108,10 @@ namespace MultiSCore
                                         plr.SendErrorMsg($"你已处于服务器 {server.Name} 中");
                                     else
                                     {
+                                        plr.SetData("MultiSCore_Switching", "");
                                         plr.SendInfoMsg($"正在传送至服务器 {server.Name}");
                                         TShock.Log.ConsoleInfo($"<MultiSCore> 玩家 {plr.Name} 准备传送至服务器 {server.Name}");
-                                        mscp?.Dispose();
-                                        ForwordPlayers[plr.Index] = new(plr.Index);
-                                        ForwordPlayers[plr.Index].SwitchServer(server);
+                                        new MSCPlayer(plr.Index).SwitchServer(server);
                                     }
                                 }
                             }

@@ -19,7 +19,8 @@ namespace MultiSCore
                 Name = name;
                 Key = key;
                 IP = ip;
-                Version = Version.Parse(version);
+                Version.TryParse(version, out var _v);
+                Version = _v;
             }
             public int Index { get; internal set; }
             public string Name { get; internal set; }

@@ -15,7 +15,7 @@ namespace MultiSCore
         {
             ConnectSuccess,
             SendPlayerIP,
-            ServerList,
+            ServerInfo,
             Chat,
             Command
         }
@@ -35,6 +35,8 @@ namespace MultiSCore
             return false;
         }
         public static MSCPlayer GetMSCPlayer(this TSPlayer plr) => MSCPlugin.Instance.ForwordPlayers[plr.Index];
+        public static RawDataBuilder GetCustomRawData(int index, CustomPacket type) => new(type, GetKey(index));
+        public static RawDataBuilder GetCustomRawData(this TSPlayer plr, CustomPacket type) => GetCustomRawData(plr.Index, type);
         internal static readonly FieldInfo CacheIP = typeof(TSPlayer).GetField("CacheIP", BindingFlags.Instance | BindingFlags.NonPublic);
         /// <summary>
         /// 检查命令是否可以使用
@@ -43,12 +45,24 @@ namespace MultiSCore
         /// <returns></returns>
         public static bool CheckCommand(this TSPlayer plr, string cmdName)
         {
-            if (plr.GetServerInfo() is { } info && (cmdName == "msc" || (info.Servers.FirstOrDefault(s => s.Name == MSCPlugin.Instance.Server.Name) is { } server && server.GlobalCommand.Contains(cmdName))))
+            if (plr.GetForwordInfo() is { } info && (cmdName == "msc" || (info.Servers.FirstOrDefault(s => s.Name == MSCPlugin.Instance.Server.Name) is { } server && server.GlobalCommand.Contains(cmdName))))
                 return false;
             else
                 return true;
         }
-        public static Config GetServerInfo(this TSPlayer plr) => plr.GetData<Config>("MultiSCore_ServerInfo");
+        public static string GetKey(int index)
+        {
+            if (MSCPlugin.Instance.ForwordInfo[index] is { } info)
+                return info.Servers.FirstOrDefault(s => s.Name == MSCPlugin.Instance.Server.Name)?.Key;
+            else if (MSCPlugin.Instance.ForwordPlayers[index] is { } mscp)
+                return mscp.Key;
+            else
+                return MSCPlugin.Key;
+        }
+        public static string GetKey(this TSPlayer plr) => GetKey(plr.Index);
+        public static Config GetForwordInfo(this TSPlayer plr) => MSCPlugin.Instance.ForwordInfo[plr.Index];
+        public static bool IsForwordPlayer(this TSPlayer plr) => plr.GetForwordInfo() is { };
+        public static bool IsForwordPlayer(int index) => MSCPlugin.Instance.ForwordInfo[index] is { };
         internal static readonly string ServerPrefix = $"<[C/A8D9D0:MultiSCore]> ";
         public static void SendSuccessMsg(this TSPlayer tsp, object text, bool playsound = true)
         {

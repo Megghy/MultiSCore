@@ -4,6 +4,7 @@ using OTAPI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Terraria;
 using Terraria.Net.Sockets;
 using TerrariaApi.Server;
@@ -12,26 +13,17 @@ using TShockAPI.Hooks;
 
 namespace MultiSCore.Core
 {
-    public class HostServer : ServerBase
+    public class HostServer
     {
-        public HostServer(string name, string key)
-        {
-            Name = name;
-            Key = key;
-        }
-
-        public override string Name { get; set; }
-        public override string Key { get; set; }
-        public override void OnPlayerLeave(LeaveEventArgs args)
+        public static void OnPlayerLeave(LeaveEventArgs args)
         {
             if (MSCPlugin.Instance.ForwordPlayers[args.Who] is { } mscp)
             {
                 mscp.Dispose();
             }
         }
-        public override HookResult OnReceiveData(MessageBuffer buffer, ref byte packetid, ref int readoffset, ref int start, ref int length)
+        public static HookResult OnReceiveData(MessageBuffer buffer, ref byte packetid, ref int readoffset, ref int start, ref int length)
         {
-            base.OnReceiveData(buffer, ref packetid, ref readoffset, ref start, ref length);
             if (MSCPlugin.Instance.ForwordPlayers[buffer.whoAmI] is { } mscp)
             {
                 mscp.SendDataToForword(buffer.readBuffer, start - 2, length + 2);
@@ -40,26 +32,23 @@ namespace MultiSCore.Core
             return MSCPlugin.Instance.OldGetDataHandler.Invoke(buffer, ref packetid, ref readoffset, ref start, ref length);
 
         }
-        public override void OnRecieveCustomData(MSCHooks.RecieveCustomDataEventArgs args)
+        public static void OnRecieveCustomData(MSCHooks.RecieveCustomDataEventArgs args)
         {
-            base.OnRecieveCustomData(args);
             if(!args.Handled)
                 switch (args.Type)
                 {
-                    case Utils.CustomPacket.ConnectSuccess:
-                        if(args.Player?.GetServerInfo() is { } info) TShock.Log.ConsoleInfo($"<MultiSCore> 注意: {args.Player.Name} 来自另一个加载了 MultiSCore 插件的主服务器 {info}, 这可能导致某些问题");
-                        if (!MSCHooks.OnPlayerFinishSwitch(args.Index, out var finishJoinArgs)) MSCPlugin.Instance.Server.OnPlayerFinishSwitch(finishJoinArgs);
-                        break;
+                    
                 }
         }
-        public override void OnPlayerFinishSwitch(MSCHooks.PlayerFinishSwitchEventArgs args)
+        public static void OnPlayerFinishSwitch(MSCHooks.PlayerFinishSwitchEventArgs args)
         {
-            if (MSCPlugin.Instance.ForwordPlayers[args.Index] is { } mscp)  
+            if (args.Player?.GetForwordInfo() is { } info) TShock.Log.ConsoleInfo($"<MultiSCore> 注意: {args.Player.Name} 来自另一个加载了 MultiSCore 插件的主服务器 {info}, 这可能导致某些问题");
+            if (MSCPlugin.Instance.ForwordPlayers[args.Index] is { } mscp)
             {
-                if(mscp.Server.SpawnX == -1 || mscp.Server.SpawnY == -1)
-                    mscp.SendDataToForword(new RawDataBuilder(Utils.CustomPacket.Command).PackString(mscp.Key).PackString("MultiSCore_Spawn")); //如果没设置出生位置则传送到出生点
-                mscp.SendDataToForword(new RawDataBuilder(Utils.CustomPacket.ServerList).PackString(mscp.Key).PackString(JsonConvert.SerializeObject(MSCPlugin.Instance.ServerConfig))); //发送服务器信息
-                mscp.SendDataToForword(new RawDataBuilder(Utils.CustomPacket.ConnectSuccess).PackString(mscp.Key)); //发送成功连接
+                mscp.SendDataToForword(mscp.GetCustomRawData(Utils.CustomPacket.ServerInfo).PackString(JsonConvert.SerializeObject(MSCPlugin.Instance.ServerConfig))); //发送服务器信息, 注意这里的key一定得用要连接到的服务器的key, 所以直接写
+                Task.Delay(500).Wait();
+                if (mscp.Server.SpawnX == -1 || mscp.Server.SpawnY == -1)
+                    mscp.SendDataToForword(mscp.GetCustomRawData(Utils.CustomPacket.Command).PackString("MultiSCore_Spawn")); //如果没设置出生位置则传送到出生点
 
                 TShock.Log.ConsoleInfo($"<MultiSCore> {args.Player.Name} 成功传送.");
                 args.Player.SendSuccessMsg($"成功传送到服务器 {mscp.Server.Name}");

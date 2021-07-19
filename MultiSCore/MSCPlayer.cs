@@ -1,5 +1,4 @@
 ﻿using Microsoft.Xna.Framework;
-using Newtonsoft.Json;
 using System;
 using System.IO;
 using System.Net.Sockets;
@@ -32,7 +31,7 @@ namespace MultiSCore
             ShouldStop = true;
             ForwordIndex = -1;
             Server = null;
-            if((bool)(Connection?.Client.Connected)) Connection?.Client?.Shutdown(SocketShutdown.Both);
+            if ((bool)(Connection?.Client.Connected)) Connection?.Client?.Shutdown(SocketShutdown.Both);
             Connection?.Client?.Close();
             Connection?.Close();
             Connection = null;
@@ -46,78 +45,87 @@ namespace MultiSCore
         }
         public void SwitchServer(Config.ForwordServer server)
         {
-            try
+            Task.Run(() =>
             {
-                if (MSCPlugin.Instance.IsHost)
+                try
                 {
-                    if (server.Name != MSCPlugin.Instance.Server.Name)
+                    if (!Player.IsForwordPlayer())
                     {
-                        if (Utils.TryParseAddress(server.IP, out var ip))
+                        if (server.Name != MSCPlugin.Instance.Server.Name)
                         {
-                            if (Connection is { }) Connection.Close();
-                            try
+                            if (Utils.TryParseAddress(server.IP, out var ip))
                             {
-                                Connection = new();
-                                Connection.Connect(server.IP, server.Port);
-                                
-                                Buffer = new byte[10240];
-                                Server = server;
+                                if (Connection is { }) Connection.Close();
+                                try
+                                {
+                                    Connection = new();
+                                    Connection.Connect(server.IP, server.Port);
 
-                                NetMessage.SendData(14, -1, Player.Index, null, Index, false.GetHashCode()); //隐藏原服务器玩家
+                                    Buffer = new byte[10240];
+                                    Server = server;
+                                    MSCPlugin.Instance.ForwordPlayers[Index]?.Dispose();
+                                    MSCPlugin.Instance.ForwordPlayers[Index] = this;
 
-                                SendDataToForword(new RawDataBuilder(1).PackString(Key).PackString(server.Name).PackString(Player.IP).PackString(MSCPlugin.Instance.Version.ToString()));  //发起连接请求
-                                
-                                Task.Run(RecieveLoop);
+                                    NetMessage.SendData(14, -1, Player.Index, null, Index, false.GetHashCode()); //隐藏原服务器玩家
+                                    Player.SetData("MultiSCore_LastPosition", new Point(Player.TileX, Player.TileY));
+
+                                    SendDataToForword(new RawDataBuilder(1).PackString(Key).PackString(server.Name).PackString(Player.IP).PackString(MSCPlugin.Instance.Version.ToString()));  //发起连接请求
+
+                                    Task.Run(RecieveLoop);
+                                }
+                                catch
+                                {
+                                    TShock.Log.ConsoleError($"<MultiSCore> Can not connect to {server.IP}:{server.Port}");
+                                    Player?.SendErrorMsg($"无法连接至服务器 {server.Name}");
+                                    Reset();
+                                }
+
                             }
-                            catch
-                            {
-                                TShock.Log.ConsoleError($"<MultiSCore> Can not connect to {server.IP}:{server.Port}");
-                                Player?.SendErrorMsg($"无法连接至服务器 {server.Name}");
-                                Dispose();
-                            }
-
+                            else Player.SendErrorMsg($"无效的服务器地址");
                         }
-                        else Player.SendErrorMsg($"无效的服务器地址");
+                        else
+                            Player.SendErrorMsg($"你已在服务器 {server.Name} 中");
                     }
                     else
-                        Player.SendErrorMsg($"你已在服务器 {server.Name} 中");
+                        Player.SendErrorMsg($"禁止在 Forword Server 中直接调用 SwitchServer 函数.");
                 }
-                else
-                    Player.SendErrorMsg($"禁止在 Forword Server 中直接调用 SwitchServer 函数.");
-            }
-            catch (Exception ex)
-            {
-                NetMessage.SendData(14, -1, -1, null, Index); //显示原服务器玩家 
-                TShock.Log.ConsoleError($"<MultiSCore> An error occurred when switching server: {ex}");
-            }
+                catch (Exception ex)
+                {
+                    NetMessage.SendData(14, -1, -1, null, Index); //显示原服务器玩家 
+                    TShock.Log.ConsoleError($"<MultiSCore> An error occurred when switching server: {ex}");
+                }
+                Player.RemoveData("MultiSCore_Switching");
+            });
         }
         public void BackToHost()
         {
-            if (MSCPlugin.Instance.IsHost)
+            Dispose();
+            int sectionX = Netplay.GetSectionX(0);
+            int sectionX2 = Netplay.GetSectionX(Main.maxTilesX);
+            int sectionX3 = Netplay.GetSectionX(0);
+            int sectionX4 = Netplay.GetSectionX(Main.maxTilesY);
+            for (int i = sectionX; i <= sectionX2; i++)
             {
-                Dispose();
-                int sectionX = Netplay.GetSectionX(0);
-                int sectionX2 = Netplay.GetSectionX(Main.maxTilesX);
-                int sectionX3 = Netplay.GetSectionX(0);
-                int sectionX4 = Netplay.GetSectionX(Main.maxTilesY);
-                for (int i = sectionX; i <= sectionX2; i++)
+                for (int j = sectionX3; j <= sectionX4; j++)
                 {
-                    for (int j = sectionX3; j <= sectionX4; j++)
-                    {
-                        Netplay.Clients[Index].TileSections[i, j] = false;
-                    }
+                    Netplay.Clients[Index].TileSections[i, j] = false;
                 }
-                NetMessage.SendData(14, -1, Index, null, Index, true.GetHashCode()); //显示原服务器玩家 
-                NetMessage.SendData(7, Index);
-                Main.npc.ForEach(n => NetMessage.SendData(23, Index, -1, null, n.whoAmI));
-                Player?.SendServerCharacter();
-                if (MSCPlugin.Instance.ServerConfig.RememberLastPoint) Player?.Teleport(Player.X, Player.Y);
-                else Player?.Spawn(PlayerSpawnContext.SpawningIntoWorld);
             }
+            NetMessage.SendData(14, -1, Index, null, Index, true.GetHashCode()); //显示原服务器玩家 
+            NetMessage.SendData(7, Index);
+            Main.npc.ForEach(n => NetMessage.SendData(23, Index, -1, null, n.whoAmI));
+            Player?.SendServerCharacter();
+            if (MSCPlugin.Instance.ServerConfig.RememberLastPoint)
+            {
+                var p = Player.GetData<Point>("MultiSCore_LastPosition");
+                Player.Teleport(p.X * 16, p.Y * 16);
+            }
+            else Player?.Spawn(PlayerSpawnContext.SpawningIntoWorld);
         }
+        public RawDataBuilder GetCustomRawData(Utils.CustomPacket type) => Utils.GetCustomRawData(Index, type);
         public void SendDataToForword(byte[] buffer, int start = -1, int size = -1)
         {
-            if (!MSCPlugin.Instance.IsHost || (!Connected && buffer[2] > 12 && buffer[2] != 93 && buffer[2] != 16 && buffer[2] != 42 && buffer[2] != 50 && buffer[2] != 38 && buffer[2] != 68 && buffer[2] != 15)) return;
+            if (!Connected && buffer[2] > 12 && buffer[2] != 93 && buffer[2] != 16 && buffer[2] != 42 && buffer[2] != 50 && buffer[2] != 38 && buffer[2] != 68 && buffer[2] != 15) return;
             SocketAsyncEventArgs args = new();
             args.SetBuffer(buffer, start == -1 ? 0 : start, size == -1 ? buffer.Length : size);
             Connection?.Client?.SendAsync(args);
