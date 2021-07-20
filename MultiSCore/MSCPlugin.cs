@@ -33,18 +33,16 @@ namespace MultiSCore
 
             Server = new(ServerConfig.Name, ServerConfig.Key);
 
-            PlayerHooks.PlayerChat += Server.OnPlayerChat;
-
             OldGetDataHandler = Hooks.Net.ReceiveData;
             Hooks.Net.ReceiveData = Server.OnReceiveData;
-            Hooks.Net.SendBytes += Server.OnSendData;
+            OldSendDataHandler = Hooks.Net.SendBytes;
+            Hooks.Net.SendBytes = Server.OnSendData;
 
             GeneralHooks.ReloadEvent += OnReload;
-            PlayerHooks.PlayerCommand += Server.OnPlayerCommand;
 
-            ServerApi.Hooks.ServerJoin.Register(this, (join) => {
-                var data = Utils.GetCustomRawData(join.Who, Utils.CustomPacket.ConnectSuccess).GetByteData();
-                Netplay.Clients[join.Who].Socket.AsyncSend(data, 0, data.Length, delegate { });
+            ServerApi.Hooks.NetGreetPlayer.Register(this, (greet) => { 
+                var data = Utils.GetCustomRawData(greet.Who, Utils.CustomPacket.ConnectSuccess).GetByteData();
+                Netplay.Clients[greet.Who].Socket.AsyncSend(data, 0, data.Length, delegate { });
             });
             ServerApi.Hooks.ServerLeave.Register(this, Server.OnPlayerLeave, int.MaxValue);
 
@@ -55,6 +53,7 @@ namespace MultiSCore
         public ServerAdapter Server;
         public static string Key => Instance.Server.Key;
         internal Hooks.Net.ReceiveDataHandler OldGetDataHandler;
+        internal Hooks.Net.SendBytesHandler OldSendDataHandler;
         /// <summary>
         /// 使用反代前往其他服务器的玩家
         /// </summary>
@@ -62,18 +61,12 @@ namespace MultiSCore
         /// <summary>
         /// 使用反代进入此服务器的玩家
         /// </summary>
-        public Config[] ForwordInfo = new Config[256];
+        public Utils.HostInfo[] ForwordInfo = new Utils.HostInfo[256];
         void OnReload(ReloadEventArgs args)
         {
             Config.Load();
             Server.Key = ServerConfig.Key;
             Server.Name = ServerConfig.Name;
-            var temp = new List<string>();
-            ForwordPlayers.Where(p => p is { }).ForEach(p =>
-            {
-                if (!temp.Contains(p.Server.Name))
-                { temp.Add(p.Server.Name); p.SendDataToForword(p.GetCustomRawData(Utils.CustomPacket.ServerInfo).PackString(JsonConvert.SerializeObject(ServerConfig))); }
-            });
         }
         void OnCommand(CommandArgs args)
         {

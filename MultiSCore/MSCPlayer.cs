@@ -111,8 +111,10 @@ namespace MultiSCore
                     Netplay.Clients[Index].TileSections[i, j] = false;
                 }
             }
+            var sscStatue = Main.ServerSideCharacter;
+            Main.ServerSideCharacter = true;
+            NetMessage.SendData(7, Index);   //不这样的话没法把背包发回去
             NetMessage.SendData(14, -1, Index, null, Index, true.GetHashCode()); //显示原服务器玩家 
-            NetMessage.SendData(7, Index);
             Main.npc.ForEach(n => NetMessage.SendData(23, Index, -1, null, n.whoAmI));
             Player?.SendServerCharacter();
             if (MSCPlugin.Instance.ServerConfig.RememberLastPoint)
@@ -121,6 +123,8 @@ namespace MultiSCore
                 Player.Teleport(p.X * 16, p.Y * 16);
             }
             else Player?.Spawn(PlayerSpawnContext.SpawningIntoWorld);
+            Main.ServerSideCharacter = sscStatue;
+            NetMessage.SendData(7, Index);  //重置ssc状态
         }
         public RawDataBuilder GetCustomRawData(Utils.CustomPacket type) => Utils.GetCustomRawData(Index, type);
         public void SendDataToForword(byte[] buffer, int start = -1, int size = -1)

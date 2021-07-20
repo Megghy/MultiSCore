@@ -45,10 +45,10 @@ namespace MultiSCore.Core
             if (args.Player?.GetForwordInfo() is { } info) TShock.Log.ConsoleInfo($"<MultiSCore> 注意: {args.Player.Name} 来自另一个加载了 MultiSCore 插件的主服务器 {info}, 这可能导致某些问题");
             if (MSCPlugin.Instance.ForwordPlayers[args.Index] is { } mscp)
             {
-                mscp.SendDataToForword(mscp.GetCustomRawData(Utils.CustomPacket.ServerInfo).PackString(JsonConvert.SerializeObject(MSCPlugin.Instance.ServerConfig))); //发送服务器信息, 注意这里的key一定得用要连接到的服务器的key, 所以直接写
-                Task.Delay(500).Wait();
                 if (mscp.Server.SpawnX == -1 || mscp.Server.SpawnY == -1)
-                    mscp.SendDataToForword(mscp.GetCustomRawData(Utils.CustomPacket.Command).PackString("MultiSCore_Spawn")); //如果没设置出生位置则传送到出生点
+                    mscp.SendDataToForword(mscp.GetCustomRawData(Utils.CustomPacket.Spawn)); //如果没设置出生位置则传送到出生点
+                else
+                    mscp.SendDataToClient(new RawDataBuilder(65).PackByte(new BitsByte() { value = 0 }).PackInt16((short)mscp.ForwordIndex).PackSingle((float)mscp.Server.SpawnX * 16).PackSingle((float)mscp.Server.SpawnY * 16).PackByte(1).GetByteData());
 
                 TShock.Log.ConsoleInfo($"<MultiSCore> {args.Player.Name} 成功传送.");
                 args.Player.SendSuccessMsg($"成功传送到服务器 {mscp.Server.Name}");
