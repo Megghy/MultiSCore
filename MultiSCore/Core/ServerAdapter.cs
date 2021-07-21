@@ -1,17 +1,14 @@
 ﻿using MaxMind;
 using Microsoft.Xna.Framework;
-using Newtonsoft.Json;
 using OTAPI;
 using System;
 using System.Linq;
 using System.Net;
 using Terraria;
-using Terraria.Chat;
 using Terraria.Localization;
 using Terraria.Net.Sockets;
 using TerrariaApi.Server;
 using TShockAPI;
-using TShockAPI.Hooks;
 
 namespace MultiSCore.Core
 {
@@ -53,15 +50,15 @@ namespace MultiSCore.Core
                     {
                         TSPlayer tsplayer = new(index);
                         Utils.CacheIP?.SetValue(tsplayer, args.IP);
-                        if (TShock.Utils.GetActivePlayerCount() + 1 > TShock.Config.Settings.MaxSlots + TShock.Config.Settings.ReservedSlots)
-                            tsplayer.Disconnect(TShock.Config.Settings.ServerFullNoReservedReason);
+                        if (TShock.Utils.GetActivePlayerCount() + 1 > Utils.GetConfigValue<int>("MaxSlots") + Utils.GetConfigValue<int>("ReservedSlots"))
+                            tsplayer.Disconnect(Utils.GetConfigValue<string>("ServerFullNoReservedReason"));
                         else if (!FileTools.OnWhitelist(tsplayer.IP))
-                            tsplayer.Disconnect(TShock.Config.Settings.WhitelistKickReason);
+                            tsplayer.Disconnect(Utils.GetConfigValue<string>("WhitelistKickReason"));
                         else if (TShock.Geo != null)
                         {
                             string text = TShock.Geo.TryGetCountryCode(IPAddress.Parse(tsplayer.IP));
                             tsplayer.Country = text == null ? "N/A" : GeoIPCountry.GetCountryNameByCode(text);
-                            if (text == "A1" && TShock.Config.Settings.KickProxyUsers)
+                            if (text == "A1" && Utils.GetConfigValue<bool>("KickProxyUsers"))
                             {
                                 tsplayer.Disconnect("不允许代理连接.");
                                 return;
@@ -86,6 +83,7 @@ namespace MultiSCore.Core
             }
             var index = buffer.whoAmI;
             var reader = buffer.reader;
+            var position = buffer.reader.BaseStream.Position;
             reader.BaseStream.Position = start + 1;
             try
             {
@@ -125,7 +123,7 @@ namespace MultiSCore.Core
                                             cmdName = text.Split(' ')[0].Remove(0, text.StartsWith(Commands.Specifier) ? Commands.Specifier.Length : Commands.SilentSpecifier.Length);
                                         }
                                         else cmdName = text.Remove(0, text.StartsWith(Commands.Specifier) ? Commands.Specifier.Length : Commands.SilentSpecifier.Length);
-                                        if (cmdName == "msc" || mscp_Chat.Server.GlobalCommand.Contains(cmdName))  //如果存在于globalCommand则阻止发送
+                                        if (cmdName.ToLower() == "msc" || mscp_Chat.Server.GlobalCommand.Contains(cmdName))  //如果存在于globalCommand则阻止发送
                                         {
                                             Commands.HandleCommand(TShock.Players[index], text);
                                             return HookResult.Cancel;
@@ -133,24 +131,23 @@ namespace MultiSCore.Core
                                     }
                                     else
                                     {
-                                        TShock.Players.Where(p => p != null && p.Index != index).ForEach(p => p.SendMessage(text, Color.White));
-                                        TShock.Log.Info(text);
-                                        Console.WriteLine($"[{mscp_Chat.Server.Name}] {TShock.Players[index].Name}: {text}");
+                                        Utils.SendMessageToHostPlayer($"[{mscp_Chat.Server.Name}] {TShock.Players[index].Name}: {text}");
                                     }
                                 }
                             }
                         }
                         break;
                 }
+                buffer.reader.BaseStream.Position = position;
                 if (MSCPlugin.Instance.ForwordPlayers[buffer.whoAmI] is { } mscp)
                 {
-                    mscp.SendDataToForword(buffer.readBuffer, start - 2, length + 2);
+                    HostServer.OnReceiveData(buffer, ref packetid, ref readoffset, ref start, ref length);
                     return HookResult.Cancel;
                 }
                 else 
                     return MSCPlugin.Instance.OldGetDataHandler(buffer, ref packetid, ref readoffset, ref start, ref length);
             }
-            catch (Exception ex) { TShock.Log.ConsoleError($"<MultiSCore> Host recieve packet error: {ex.Message}"); return HookResult.Cancel; }
+            catch (Exception ex) { TShock.Log.ConsoleError($"<MultiSCore> Recieve packet error: {ex.Message}"); return HookResult.Cancel; }
 
         }
         public void OnRecieveCustomData(MSCHooks.RecieveCustomDataEventArgs args)
@@ -160,15 +157,12 @@ namespace MultiSCore.Core
                 var plr = args.Player;
                 var reader = args.Reader;
                 var key = reader.ReadString();
-                if (plr.GetKey() == key)
+                if (Utils.GetKey(args.Index) == key)
                     switch (args.Type)
                     {
                         case Utils.CustomPacket.Spawn:
                             plr?.Spawn(PlayerSpawnContext.SpawningIntoWorld);
-                            break;
-                        case Utils.CustomPacket.ConnectSuccess:
-                            if (!MSCHooks.OnPlayerFinishSwitch(args.Index, out var finishJoinArgs))
-                                OnPlayerFinishSwitch(finishJoinArgs);
+                            TShock.Log.ConsoleInfo($"<MultiSCore> 传送 {plr.Name} 至出生点");
                             break;
                     }
                 else
@@ -184,11 +178,10 @@ namespace MultiSCore.Core
         }
         public HookResult OnSendData(ref int remoteClient, ref byte[] data, ref int offset, ref int size, ref SocketSendCallback callback, ref object state)
         {
-            if (MSCPlugin.Instance.ForwordPlayers[remoteClient] is { } mscp)
-            {
+            if (MSCPlugin.Instance.ForwordPlayers[remoteClient] is { Back: false } mscp)
                 return HookResult.Cancel;
-            }
-            return MSCPlugin.Instance.OldSendDataHandler(ref remoteClient, ref data, ref offset, ref size, ref callback, ref state);
+            else
+                return MSCPlugin.Instance.OldSendDataHandler.Invoke(ref remoteClient, ref data, ref offset, ref size, ref callback, ref state);
         }
         public void OnPlayerLeave(LeaveEventArgs args)
         {

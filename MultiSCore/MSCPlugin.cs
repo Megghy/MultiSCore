@@ -1,9 +1,6 @@
-﻿using HttpServer;
-using MultiSCore.Core;
-using Newtonsoft.Json;
+﻿using MultiSCore.Core;
 using OTAPI;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Terraria;
@@ -23,9 +20,7 @@ namespace MultiSCore
         public override Version Version => Assembly.GetExecutingAssembly().GetName().Version;
         public override void Initialize()
         {
-            if (TShock.VersionNum < new Version(1, 4, 2, 0)) TShock.Log.ConsoleInfo("<MultiSCore> TShock版本低于1.4.2.0, 插件将不会进行加载");
-            else
-                ServerApi.Hooks.GamePostInitialize.Register(this, OnPostInit);
+            ServerApi.Hooks.GamePostInitialize.Register(this, OnPostInit);
         }
         void OnPostInit(EventArgs args)
         {
@@ -40,9 +35,8 @@ namespace MultiSCore
 
             GeneralHooks.ReloadEvent += OnReload;
 
-            ServerApi.Hooks.NetGreetPlayer.Register(this, (greet) => { 
-                var data = Utils.GetCustomRawData(greet.Who, Utils.CustomPacket.ConnectSuccess).GetByteData();
-                Netplay.Clients[greet.Who].Socket.AsyncSend(data, 0, data.Length, delegate { });
+            ServerApi.Hooks.NetGreetPlayer.Register(this, (greet) => {
+                TShock.Players.Where(p => p != null).ForEach(p => TShock.Players.ForEach(_p => p.SendData(PacketTypes.PlayerActive, null, p.Index, (ForwordPlayers[p.Index] == null).GetHashCode())));
             });
             ServerApi.Hooks.ServerLeave.Register(this, Server.OnPlayerLeave, int.MaxValue);
 
@@ -84,14 +78,14 @@ namespace MultiSCore
                 {
                     case "tp":
                     case "t":
-                        if(plr.GetData<string>("MultiSCore_Switching") is { })
+                        if (plr.GetData<string>("MultiSCore_Switching") is { })
                         {
                             plr.SendErrorMsg($"正在跳转中, 请勿使用此命令");
                             return;
                         }
                         if (cmd.Count > 1)
                         {
-                            if (Instance.ServerConfig.Servers.FirstOrDefault(s => s.Name == cmd[1] || s.Name.ToLower().Contains(cmd[1])) is { } server)
+                            if (Instance.ServerConfig.Servers.FirstOrDefault(s => s.Name == cmd[1] || s.Name.ToLower().StartsWith(cmd[1])) is { } server)
                             {
                                 if (!string.IsNullOrEmpty(server.Permission) && plr.HasPermission(server.Permission))
                                     plr.SendErrorMsg($"你没有权限进入服务器 {server.Name}");
@@ -139,6 +133,22 @@ namespace MultiSCore
                         }
                         else plr.SendInfoMsg($"你尚未进入任何服务器");
                         break;
+                    case "command":
+                    case "cmd":
+                    case "c":
+                        if (mscp is { })
+                        {
+                            if (cmd.Count > 1)
+                            {
+                                cmd.RemoveAt(0);
+                                Commands.HandleCommand(plr, string.Join(" ", cmd));
+                            }
+                            else
+                                plr.SendErrorMsg($"无效的格式.\r\n" +
+                   $"/msc command([c/B3CE95:c]) <[c/B3CE95:指令]>  --  在传送前的服务器执行命令");
+                        }
+                        else plr.SendInfoMsg($"你尚未进入任何服务器");
+                        break;
                     default:
                         sendHelpText();
                         break;
@@ -147,10 +157,11 @@ namespace MultiSCore
             else sendHelpText();
             void sendHelpText()
             {
-                plr.SendErrorMsg($"无效的命令.\r\n" +
+                plr.SendInfoMsg($"无效的命令.\r\n" +
                     $"/msc tp([c/B3CE95:t]) <[c/B3CE95:服务器名]>  --  传送到指定服务器\r\n" +
                     $"/msc back([c/B3CE95:b])  --  传送回主服务器\r\n" +
-                    $"/msc list([c/B3CE95:l])  --  列出所有可用的服务器"
+                    $"/msc list([c/B3CE95:l])  --  列出所有可用的服务器\r\n" +
+                    $"/msc command([c/B3CE95:c]) <[c/B3CE95:指令]>  --  在传送前的服务器执行命令"
                     );
             }
         }

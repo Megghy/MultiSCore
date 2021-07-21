@@ -1,11 +1,11 @@
 ﻿using Microsoft.Xna.Framework;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Reflection;
 using Terraria;
 using TShockAPI;
+using TShockAPI.Configuration;
 
 namespace MultiSCore
 {
@@ -19,18 +19,26 @@ namespace MultiSCore
         public class HostInfo
         {
             public Version Version { get; set; }
-            public string Key { get;set; }
+            public string Key { get; set; }
         }
         public static bool TryParseAddress(string address, out string ip)
         {
             ip = "";
             try
             {
-                IPHostEntry hostinfo = Dns.GetHostEntry(address);
-                if (hostinfo.AddressList.FirstOrDefault() is { } _ip)
+                if (IPAddress.TryParse(address, out _))
                 {
-                    ip = _ip.ToString();
+                    ip = address;
                     return true;
+                }
+                else
+                {
+                    IPHostEntry hostinfo = Dns.GetHostEntry(address);
+                    if (hostinfo.AddressList.FirstOrDefault() is { } _ip)
+                    {
+                        ip = _ip.ToString();
+                        return true;
+                    }
                 }
             }
             catch { }
@@ -40,6 +48,24 @@ namespace MultiSCore
         public static RawDataBuilder GetCustomRawData(int index, CustomPacket type) => new(type, GetKey(index));
         public static RawDataBuilder GetCustomRawData(this TSPlayer plr, CustomPacket type) => GetCustomRawData(plr.Index, type);
         internal static readonly FieldInfo CacheIP = typeof(TSPlayer).GetField("CacheIP", BindingFlags.Instance | BindingFlags.NonPublic);
+        internal static T GetConfigValue<T>(string name)
+        {
+            try
+            {
+                if (TShock.VersionNum < new Version(4, 4, 0, 0))
+                    return GetConfigValue_440<T>(name);
+                else
+                    return GetConfigValue_450<T>(name);
+            }
+            catch (Exception ex)
+            { TShock.Log.ConsoleError($"<MultiSCore> Get config value error: {ex.Message}"); return default; }
+        }
+        static T GetConfigValue_450<T>(string name) => (T)typeof(TShockSettings).GetField(name).GetValue(TShock.Config.Settings);
+        static T GetConfigValue_440<T>(string name)
+        {
+            var t = Assembly.GetExecutingAssembly().GetType("TShock.Config");
+            return (T)t.GetField(name).GetValue(t.Assembly.CreateInstance("TShock.Config"));
+        }
         public static string GetKey(int index)
         {
             if (MSCPlugin.Instance.ForwordInfo[index] is { } info)
@@ -49,10 +75,14 @@ namespace MultiSCore
             else
                 return MSCPlugin.Key;
         }
-        public static string GetKey(this TSPlayer plr) => GetKey(plr.Index);
         public static HostInfo GetForwordInfo(this TSPlayer plr) => MSCPlugin.Instance.ForwordInfo[plr.Index];
         public static bool IsForwordPlayer(this TSPlayer plr) => plr.GetForwordInfo() is { };
-        public static bool IsForwordPlayer(int index) => MSCPlugin.Instance.ForwordInfo[index] is { };
+        public static void SendMessageToHostPlayer(string text)
+        {
+            TShock.Players.Where(p => p != null && MSCPlugin.Instance.ForwordPlayers[p.Index] == null).ForEach(p => p.SendMessage(text, Color.White));
+            TShock.Log.Info(text);
+            Console.WriteLine(text);
+        }
         internal static readonly string ServerPrefix = $"<[C/A8D9D0:MultiSCore]> ";
         public static void SendSuccessMsg(this TSPlayer tsp, object text, bool playsound = true)
         {

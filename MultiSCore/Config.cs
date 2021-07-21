@@ -29,8 +29,7 @@ namespace MultiSCore
                 else MSCPlugin.Instance.ServerConfig = JsonConvert.DeserializeObject<Config>(File.ReadAllText(path));
                 if (MSCPlugin.Instance.ServerConfig.Servers.Any(s => s.Key.StartsWith("Terraria")))
                 {
-                    TShock.Log.ConsoleInfo("<MultiSCore> 服务器秘钥禁止使用Terraria开头");
-                    Console.ReadKey();
+                    TShock.Log.ConsoleInfo("<MultiSCore> 使用Terrariaxxx进入原版服务器可能造成一些问题");
                 }
                 TShock.Log.ConsoleInfo("<MultiSCore> Read config success.");
             }
