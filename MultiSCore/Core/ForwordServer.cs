@@ -1,4 +1,6 @@
-﻿using Terraria;
+﻿using ClientApi.Networking;
+using Rests;
+using Terraria;
 using TShockAPI;
 
 namespace MultiSCore.Core
@@ -15,6 +17,9 @@ namespace MultiSCore.Core
         public static void OnPlayerFinishSwitch(MSCHooks.PlayerFinishSwitchEventArgs args)
         {
             Main.npc.ForEach(n => NetMessage.SendData(23, args.Index, -1, null, n.whoAmI));
+            var data = Utils.GetCustomRawData(args.Index, Utils.CustomPacket.ConnectSuccess).GetByteData();
+            args.Player.SendRawData(data);
+            TShock.Log.ConsoleInfo($"<MultiSCore> {args.Player.Name} 载入完成");
         }
     }
 }

@@ -78,7 +78,7 @@ namespace MultiSCore.Core
         {
             if ((Netplay.Clients[buffer.whoAmI].State < 10 && packetid > 12 && packetid != 93 && packetid != 16 && packetid != 42 && packetid != 50 && packetid != 38 && packetid != 68 && packetid != 15) || (Netplay.Clients[buffer.whoAmI].State == 0 && packetid != 1 && packetid != 15))
             {
-                TShock.Log.ConsoleInfo($"无效的操作 - {(PacketTypes)packetid}");
+                TShock.Log.ConsoleInfo($"当前状态下操作无效 - {(PacketTypes)packetid}");
                 return HookResult.Cancel;
             }
             var index = buffer.whoAmI;
@@ -105,38 +105,6 @@ namespace MultiSCore.Core
                         }
                         if (!MSCHooks.OnPlayerJoin(index, reader.ReadString(), key, reader.ReadString(), reader.ReadString(), out var joinArgs)) OnConnectRequest(joinArgs);
                         return HookResult.Cancel;
-                    case 82:
-                        if(MSCPlugin.Instance.ForwordPlayers[index] is { } mscp_Chat)
-                        {
-                            if (reader.ReadByte() == 1)
-                            {
-                                reader.BaseStream.Position = start + 3;
-                                if (reader.ReadString() == "Say")
-                                {
-                                    reader.BaseStream.Position = start + 7;
-                                    var text = reader.ReadString();
-                                    if (text.StartsWith(Commands.Specifier) || text.StartsWith(Commands.SilentSpecifier))
-                                    {
-                                        var cmdName = string.Empty;
-                                        if (text.Contains(" "))
-                                        {
-                                            cmdName = text.Split(' ')[0].Remove(0, text.StartsWith(Commands.Specifier) ? Commands.Specifier.Length : Commands.SilentSpecifier.Length);
-                                        }
-                                        else cmdName = text.Remove(0, text.StartsWith(Commands.Specifier) ? Commands.Specifier.Length : Commands.SilentSpecifier.Length);
-                                        if (cmdName.ToLower() == "msc" || mscp_Chat.Server.GlobalCommand.Contains(cmdName))  //如果存在于globalCommand则阻止发送
-                                        {
-                                            Commands.HandleCommand(TShock.Players[index], text);
-                                            return HookResult.Cancel;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        Utils.SendMessageToHostPlayer($"[{mscp_Chat.Server.Name}] {TShock.Players[index].Name}: {text}");
-                                    }
-                                }
-                            }
-                        }
-                        break;
                 }
                 buffer.reader.BaseStream.Position = position;
                 if (MSCPlugin.Instance.ForwordPlayers[buffer.whoAmI] is { } mscp)
@@ -160,9 +128,22 @@ namespace MultiSCore.Core
                 if (Utils.GetKey(args.Index) == key)
                     switch (args.Type)
                     {
+                        case Utils.CustomPacket.ConnectSuccess:
+                            if (!MSCHooks.OnPlayerFinishSwitch(args.Index, out var finishJoinArgs))
+                            {
+                                args.Player.RemoveData("MultiSCore_Switching");
+                                if (args.Player.IsForwordPlayer())
+                                    ForwordServer.OnPlayerFinishSwitch(finishJoinArgs);
+                                else HostServer.OnPlayerFinishSwitch(finishJoinArgs);
+                            }
+                            break;
                         case Utils.CustomPacket.Spawn:
                             plr?.Spawn(PlayerSpawnContext.SpawningIntoWorld);
                             TShock.Log.ConsoleInfo($"<MultiSCore> 传送 {plr.Name} 至出生点");
+                            break;
+                        case Utils.CustomPacket.Command:
+                            var cmd = reader.ReadString();
+                            Commands.HandleCommand(plr, cmd.StartsWith(Commands.Specifier) || cmd.StartsWith(Commands.SilentSpecifier) ? cmd : Commands.Specifier + cmd);
                             break;
                     }
                 else
@@ -187,13 +168,6 @@ namespace MultiSCore.Core
         {
             MSCPlugin.Instance.ForwordPlayers[args.Who]?.Dispose();
             MSCPlugin.Instance.ForwordInfo[args.Who] = null;
-        }
-        public void OnPlayerFinishSwitch(MSCHooks.PlayerFinishSwitchEventArgs args)
-        {
-            args.Player.RemoveData("MultiSCore_Switching");
-            if (args.Player.IsForwordPlayer())
-                ForwordServer.OnPlayerFinishSwitch(args);
-            else HostServer.OnPlayerFinishSwitch(args);
         }
     }
 }

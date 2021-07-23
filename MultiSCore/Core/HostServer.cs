@@ -16,7 +16,8 @@ namespace MultiSCore.Core
         }
         public static HookResult OnReceiveData(MessageBuffer buffer, ref byte packetid, ref int readoffset, ref int start, ref int length)
         {
-            var mscp = MSCPlugin.Instance.ForwordPlayers[buffer.whoAmI];
+            int index = buffer.whoAmI;
+            var mscp = MSCPlugin.Instance.ForwordPlayers[index];
             if (mscp.Back)
                 switch (packetid)
                 {
@@ -31,8 +32,48 @@ namespace MultiSCore.Core
                         mscp.Dispose();
                         return HookResult.Cancel;
                 }
-            else 
-                mscp.SendDataToForword(buffer.readBuffer, start - 2, length + 2);
+            else
+                switch (packetid)
+                {
+                    case 12:
+                        if (!mscp.Connected && !MSCHooks.OnPlayerFinishSwitch(index, out var finishJoinArgs))
+                            OnPlayerFinishSwitch(finishJoinArgs);
+                        break;
+                    case 82:
+                        if (MSCPlugin.Instance.ForwordPlayers[index] is { } mscp_Chat)
+                        {
+                            buffer.reader.BaseStream.Position = start + 1;
+                            if (buffer.reader.ReadByte() == 1)
+                            {
+                                buffer.reader.BaseStream.Position = start + 3;
+                                if (buffer.reader.ReadString() == "Say")
+                                {
+                                    buffer.reader.BaseStream.Position = start + 7;
+                                    var text = buffer.reader.ReadString();
+                                    if (text.StartsWith(Commands.Specifier) || text.StartsWith(Commands.SilentSpecifier))
+                                    {
+                                        var cmdName = string.Empty;
+                                        if (text.Contains(" "))
+                                        {
+                                            cmdName = text.Split(' ')[0].Remove(0, text.StartsWith(Commands.Specifier) ? Commands.Specifier.Length : Commands.SilentSpecifier.Length);
+                                        }
+                                        else cmdName = text.Remove(0, text.StartsWith(Commands.Specifier) ? Commands.Specifier.Length : Commands.SilentSpecifier.Length);
+                                        if (cmdName.ToLower() == "msc" || mscp_Chat.Server.GlobalCommand.Contains(cmdName))  //如果存在于globalCommand则阻止发送
+                                        {
+                                            Commands.HandleCommand(TShock.Players[index], text);
+                                            return HookResult.Cancel;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        Utils.SendMessageToHostPlayer($"[{mscp_Chat.Server.Name}] {TShock.Players[index].Name}: {text}");
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                }
+            mscp.SendDataToForword(buffer.readBuffer, start - 2, length + 2);
             return HookResult.Cancel;
         }
         public static void OnRecieveCustomData(MSCHooks.RecieveCustomDataEventArgs args)
@@ -52,6 +93,7 @@ namespace MultiSCore.Core
                     mscp.SendDataToForword(mscp.GetCustomRawData(Utils.CustomPacket.Spawn)); //如果没设置出生位置则传送到出生点
                 else
                     mscp.SendDataToClient(new RawDataBuilder(65).PackByte(new BitsByte() { value = 0 }).PackInt16((short)mscp.ForwordIndex).PackSingle((float)mscp.Server.SpawnX * 16).PackSingle((float)mscp.Server.SpawnY * 16).PackByte(1).GetByteData());
+                mscp.Connected = true;
                 TShock.Log.ConsoleInfo($"<MultiSCore> {args.Player.Name} 成功传送.");
                 args.Player.SendSuccessMsg($"成功传送到服务器 {mscp.Server.Name}");
             }

@@ -37,6 +37,11 @@ namespace MultiSCore
 
             ServerApi.Hooks.NetGreetPlayer.Register(this, (greet) => {
                 TShock.Players.Where(p => p != null).ForEach(p => TShock.Players.ForEach(_p => p.SendData(PacketTypes.PlayerActive, null, p.Index, (ForwordPlayers[p.Index] == null).GetHashCode())));
+                
+                if (ForwordInfo[greet.Who] is { } && !MSCHooks.OnPlayerFinishSwitch(greet.Who, out var finishJoinArgs))
+                    ForwordServer.OnPlayerFinishSwitch(finishJoinArgs);
+
+                TShock.Players[greet.Who].IgnoreSSCPackets = false;
             });
             ServerApi.Hooks.ServerLeave.Register(this, Server.OnPlayerLeave, int.MaxValue);
 
@@ -64,14 +69,14 @@ namespace MultiSCore
         }
         void OnCommand(CommandArgs args)
         {
-            if (args.Player.IsForwordPlayer())
-            {
-                args.Player.SendErrorMsg($"无法在此环境中使用 MultiSCore 命令");
-                return;
-            }
             var plr = args.Player;
             var cmd = args.Parameters;
             var mscp = Instance.ForwordPlayers[plr.Index];
+            if (plr.IsForwordPlayer())
+            {
+                plr.SendRawData(plr.GetCustomRawData(Utils.CustomPacket.Command).PackString(args.Message).GetByteData());
+                return;
+            }
             if (cmd.Any())
             {
                 switch (cmd[0].ToLower())

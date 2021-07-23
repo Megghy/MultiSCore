@@ -23,7 +23,7 @@ namespace MultiSCore
                     RememberLastPoint = true,
                     Servers = new()
                     {
-                        new() { Key = "1145141919810", Visible = true, Permission = "", IP = "yfeil.top", Port = 7777, Name = "yfeil", SpawnX = -1, SpawnY = -1, GlobalCommand = new() { "online", "who" } }
+                        new() { Key = "1145141919810", Visible = true, Permission = "", IP = "yfeil.top", Port = 7777, Name = "yfeil", SpawnX = -1, SpawnY = -1, RememberHostInventory = true, GlobalCommand = new() { "online", "who" } }
                     }
                 }, Formatting.Indented));
                 else MSCPlugin.Instance.ServerConfig = JsonConvert.DeserializeObject<Config>(File.ReadAllText(path));
@@ -48,12 +48,13 @@ namespace MultiSCore
             public string Name { get; set; }
             public int SpawnX { get; set; }
             public int SpawnY { get; set; }
+            public bool RememberHostInventory { get; set; }
             public List<string> GlobalCommand { get; set; } = new();
         }
-        public bool AllowOthorServerJoin { get; set; }
-        public bool AllowDirectJoin { get; set; }
         public string Key { get; set; }
         public string Name { get; set; }
+        public bool AllowOthorServerJoin { get; set; }
+        public bool AllowDirectJoin { get; set; }
         public bool RememberLastPoint { get; set; }
         public List<ForwordServer> Servers { get; set; }
     }

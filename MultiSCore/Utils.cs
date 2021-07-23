@@ -14,7 +14,8 @@ namespace MultiSCore
         public enum CustomPacket
         {
             ConnectSuccess,
-            Spawn
+            Spawn,
+            Command
         }
         public class HostInfo
         {
@@ -52,7 +53,7 @@ namespace MultiSCore
         {
             try
             {
-                if (TShock.VersionNum < new Version(4, 4, 0, 0))
+                if (TShock.VersionNum < new Version(4, 5, 0, 0))
                     return GetConfigValue_440<T>(name);
                 else
                     return GetConfigValue_450<T>(name);
@@ -61,11 +62,7 @@ namespace MultiSCore
             { TShock.Log.ConsoleError($"<MultiSCore> Get config value error: {ex.Message}"); return default; }
         }
         static T GetConfigValue_450<T>(string name) => (T)typeof(TShockSettings).GetField(name).GetValue(TShock.Config.Settings);
-        static T GetConfigValue_440<T>(string name)
-        {
-            var t = Assembly.GetExecutingAssembly().GetType("TShock.Config");
-            return (T)t.GetField(name).GetValue(t.Assembly.CreateInstance("TShock.Config"));
-        }
+        static T GetConfigValue_440<T>(string name) => (T)AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == "TShockAPI").GetType("TShockAPI.ConfigFile").GetField(name).GetValue(typeof(TShock).GetProperty("Config").GetValue(null));
         public static string GetKey(int index)
         {
             if (MSCPlugin.Instance.ForwordInfo[index] is { } info)
