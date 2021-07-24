@@ -1,5 +1,6 @@
 ﻿using Microsoft.Xna.Framework;
-using Rests;
+using MultiSCore.Core;
+using MySql.Data.MySqlClient.Authentication;
 using System;
 using System.IO;
 using System.Linq;
@@ -32,6 +33,8 @@ namespace MultiSCore
         internal bool ShouldStop = false;
         internal bool Back = false;
 
+        public int SpawnX = -1;
+        public int SpawnY = -1;
         internal PlayerData DataBackup;
         internal int PlayerDifficulty;
         public void Reset()
@@ -64,46 +67,41 @@ namespace MultiSCore
         {
             if (!Player.IsForwordPlayer())
             {
-                if (server.Name != MSCPlugin.Instance.Server.Name)
+                if (Utils.TryParseAddress(server.IP, out var ip))
                 {
-                    if (Utils.TryParseAddress(server.IP, out var ip))
+                    if (Connection is { }) Connection.Close();
+                    try
                     {
-                        if (Connection is { }) Connection.Close();
-                        try
-                        {
-                            Connection = new();
-                            Connection.Connect(server.IP, server.Port);
+                        Connection = new();
+                        Connection.Connect(server.IP, server.Port);
 
-                            Server = server;
+                        Server = server;
 
-                            MSCPlugin.Instance.ForwordPlayers[Index]?.Dispose();
-                            MSCPlugin.Instance.ForwordPlayers[Index] = this;
-                            Task.Run(StartReceiveData);
+                        MSCPlugin.Instance.ForwordPlayers[Index]?.Dispose();
+                        MSCPlugin.Instance.ForwordPlayers[Index] = this;
+                        Task.Run(StartReceiveData);
 
-                            if (server.Key.StartsWith("Terraria") && int.TryParse(server.Key.Remove(0, 8), out _) && server.Key.Length == 11)
-                                IsVanillaServer = true;
+                        if (server.Key.StartsWith("Terraria") && int.TryParse(server.Key.Remove(0, 8), out _) && server.Key.Length == 11)
+                            IsVanillaServer = true;
 
-                            NetMessage.SendData(14, -1, Player.Index, null, Index, false.GetHashCode()); //隐藏原服务器玩家
-                            Player.SetData("MultiSCore_LastPosition", new Point(Player.TileX, Player.TileY));
-                            Player.SetData("MultiSCore_SpawnPosition", new Point(Player.TPlayer.SpawnX, Player.TPlayer.SpawnY)); //有时候出生点位置会失效
-                            DataBackup = new PlayerData(null);
-                            DataBackup.CopyCharacter(Player);
-                            PlayerDifficulty = Player.TPlayer.difficulty;
+                        NetMessage.SendData(14, -1, Player.Index, null, Index, false.GetHashCode()); //隐藏原服务器玩家
+                        Player.SetData("MultiSCore_LastPosition", new Point(Player.TileX, Player.TileY));
+                        Player.SetData("MultiSCore_SpawnPosition", new Point(Player.TPlayer.SpawnX, Player.TPlayer.SpawnY)); //有时候出生点位置会失效
+                        DataBackup = new PlayerData(null);
+                        DataBackup.CopyCharacter(Player);
+                        PlayerDifficulty = Player.TPlayer.difficulty;
 
-                            SendDataToForword(new RawDataBuilder(1).PackString(Key).PackString(server.Name).PackString(Player.IP).PackString(MSCPlugin.Instance.Version.ToString()));  //发起连接请求
-                        }
-                        catch
-                        {
-                            TShock.Log.ConsoleError($"<MultiSCore> Can not connect to {server.IP}:{server.Port}");
-                            Player?.SendErrorMsg($"无法连接至服务器 {server.Name}");
-                            Reset();
-                        }
-
+                        SendDataToForword(new RawDataBuilder(1).PackString(Key).PackString(server.Name).PackString(Player.IP).PackString(MSCPlugin.Instance.Version.ToString()));  //发起连接请求
                     }
-                    else Player.SendErrorMsg($"无效的服务器地址");
+                    catch
+                    {
+                        TShock.Log.ConsoleError(string.Format(Utils.GetText("Log_CannotConnect"), server.IP, server.Port));
+                        Player?.SendErrorMsg(string.Format(Utils.GetText("Prompt_CannotConnect"), server.Name));
+                        Reset();
+                    }
+
                 }
-                else
-                    Player.SendErrorMsg($"你已在服务器 {server.Name} 中");
+                else Player.SendErrorMsg(Utils.GetText("Prompt_UnknownAddress"));
             }
             else
                 Player.SendErrorMsg($"禁止在 Forword Server 中直接调用 SwitchServer 函数.");
@@ -190,12 +188,12 @@ namespace MultiSCore
                 }
                 buffer = null;
             }
-            catch(SocketException)
+            catch (SocketException)
             {
                 if (Connected)
                 {
                     BackToHost();
-                    Player?.SendInfoMsg("由于不可预料的错误, 你已被传送回主服务器");
+                    Player?.SendInfoMsg(Utils.GetText("Prompt_UnknownError"));
                 }
             }
             catch (Exception ex)
@@ -246,8 +244,8 @@ namespace MultiSCore
                         {
                             reader.BaseStream.Position = 3L;
                             var reason = NetworkText.Deserialize(reader);
-                            Player?.SendInfoMsg($"你已被移出服务器 {Server.Name}: {reason}");
-                            TShock.Log.ConsoleInfo($"<MultiSCore> {Player?.Name} 被移出服务器 {Server.Name}: {reason}");
+                            Player?.SendInfoMsg(string.Format(Utils.GetText("Prompt_Disconnect"), Server.Name, reason));
+                            TShock.Log.ConsoleInfo(string.Format(Utils.GetText("Log_Disconnect"), Player.Name, Server.Name, reason));
                             BackToHost();
                             return false;
                         }
@@ -255,10 +253,14 @@ namespace MultiSCore
                         ForwordIndex = tempBuffer[startIndex + 3];
                         return true;
                     case 7:
+                        SpawnX = BitConverter.ToInt16(tempBuffer, startIndex + 13);
+                        SpawnY = BitConverter.ToInt16(tempBuffer, startIndex + 15) - 3;
                         if (!Connected)
                         {
                             SendDataToForword(new RawDataBuilder(8).PackInt32(Server.SpawnX).PackInt32(Server.SpawnY));
                             SendDataToForword(new RawDataBuilder(12).PackByte((byte)ForwordIndex).PackInt16((short)Server.SpawnX).PackInt16((short)Server.SpawnY).PackInt32(0).PackByte(1));
+                            if (!Connected && !MSCHooks.OnPlayerFinishSwitch(Index, out var finishJoinArgs))
+                                HostServer.OnPlayerFinishSwitch(finishJoinArgs);
                         }
                         return true;
                     case 15:
@@ -272,7 +274,7 @@ namespace MultiSCore
                         return false;
                     case 37:
                         if (string.IsNullOrEmpty(Password))
-                            Player.SendErrorMsg($"服务器 {Server.Name} 需要密码, 请输入 /msc password([c/B3CE95:p]) <[c/B3CE95:密码]>");
+                            Player.SendErrorMsg(string.Format(Utils.GetText("Prompt_NeedPassword"), Server.Name, Utils.GetText("Help_Password")));
                         return false;
                     default: return true;
                 }

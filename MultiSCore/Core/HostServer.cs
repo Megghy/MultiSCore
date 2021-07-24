@@ -1,4 +1,5 @@
 ﻿using OTAPI;
+using System;
 using Terraria;
 using TerrariaApi.Server;
 using TShockAPI;
@@ -35,10 +36,6 @@ namespace MultiSCore.Core
             else
                 switch (packetid)
                 {
-                    case 12:
-                        if (!mscp.Connected && !MSCHooks.OnPlayerFinishSwitch(index, out var finishJoinArgs))
-                            OnPlayerFinishSwitch(finishJoinArgs);
-                        break;
                     case 82:
                         if (MSCPlugin.Instance.ForwordPlayers[index] is { } mscp_Chat)
                         {
@@ -89,13 +86,14 @@ namespace MultiSCore.Core
             if (MSCPlugin.Instance.ForwordPlayers[args.Index] is { } mscp)
             {
                 if (mscp.Server.SpawnX == -1 || mscp.Server.SpawnY == -1)
-                    
-                    mscp.SendDataToForword(mscp.GetCustomRawData(Utils.CustomPacket.Spawn)); //如果没设置出生位置则传送到出生点
+                    mscp.SendDataToClient(new RawDataBuilder(65).PackByte(new BitsByte() { value = 0 }).PackInt16((short)mscp.ForwordIndex).PackSingle((float)mscp.SpawnX * 16).PackSingle((float)mscp.SpawnY * 16).PackByte(1).GetByteData());
                 else
                     mscp.SendDataToClient(new RawDataBuilder(65).PackByte(new BitsByte() { value = 0 }).PackInt16((short)mscp.ForwordIndex).PackSingle((float)mscp.Server.SpawnX * 16).PackSingle((float)mscp.Server.SpawnY * 16).PackByte(1).GetByteData());
+                if (args.Player.ContainsData("MultiSCore_Switching"))
+                    args.Player.RemoveData("MultiSCore_Switching");
                 mscp.Connected = true;
-                TShock.Log.ConsoleInfo($"<MultiSCore> {args.Player.Name} 成功传送.");
-                args.Player.SendSuccessMsg($"成功传送到服务器 {mscp.Server.Name}");
+                TShock.Log.ConsoleInfo(string.Format(Utils.GetText("Log_ConnectSuccess"), args.Player.Name, mscp.Server.Name));
+                args.Player.SendSuccessMsg(string.Format(Utils.GetText("Prompt_ConnectSuccess"), mscp.Server.Name));
             }
         }
     }

@@ -25,27 +25,27 @@ namespace MultiSCore.Core
         {
             var index = args.Index;
             if (!MSCPlugin.Instance.ServerConfig.AllowOthorServerJoin)
-                NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral($"此服务器不允许被其他服务器连接"));
+                NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral(Utils.GetText("Log_DontAllowOthorServerJoin")));
             else if (args.Key != MSCPlugin.Key)
             {
-                TShock.Log.ConsoleInfo($"<MultiSCore> 无效的秘钥: {args.Key}");
-                NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral("无效的秘钥"));
+                TShock.Log.ConsoleInfo(string.Format(Utils.GetText("Log_UnknownKey"), args.Key));
+                NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral(Utils.GetText("Log_UnknownKey_SendToForword")));
             }
             else if (args.Name != Name)
             {
-                TShock.Log.ConsoleInfo($"不匹配的服务器名: {args.Key}");
-                NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral("不匹配的服务器名"));
+                TShock.Log.ConsoleInfo(string.Format(Utils.GetText("Log_MismatchedServerName"), args.Name));
+                NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral(Utils.GetText("Log_MismatchedServerName_SendToForword")));
             }
             else
             {
                 if (args.Version != MSCPlugin.Instance.Version)
-                    TShock.Log.ConsoleInfo($"<MultiSCore> {args.IP} 来自不同版本的 MultiSCore 代理, 本机: {MSCPlugin.Instance.Version}, 对方: {args.Version}. 这可能造成某些错误");
+                    TShock.Log.ConsoleInfo(string.Format(Utils.GetText("Log_MismatchedServerVersion"), args.IP, MSCPlugin.Instance.Version, args.Version));
                 if (Netplay.IsBanned(Netplay.Clients[index].Socket.GetRemoteAddress()))
                     NetMessage.TrySendData(2, index, -1, Lang.mp[3].ToNetworkText());
                 else
                 {
                     if (TShock.ShuttingDown)
-                        NetMessage.SendData(2, index, -1, NetworkText.FromLiteral("服务器正在关闭"));
+                        NetMessage.SendData(2, index, -1, NetworkText.FromLiteral("Server shutting down."));
                     else
                     {
                         TSPlayer tsplayer = new(index);
@@ -60,7 +60,7 @@ namespace MultiSCore.Core
                             tsplayer.Country = text == null ? "N/A" : GeoIPCountry.GetCountryNameByCode(text);
                             if (text == "A1" && Utils.GetConfigValue<bool>("KickProxyUsers"))
                             {
-                                tsplayer.Disconnect("不允许代理连接.");
+                                tsplayer.Disconnect("Proxy connections are not allowed.");
                                 return;
                             }
                         }
@@ -70,7 +70,7 @@ namespace MultiSCore.Core
                     Netplay.Clients[index].State = 1;
                     MSCPlugin.Instance.ForwordInfo[index] = new() { Version = args.Version, Key = args.Key };
                     NetMessage.TrySendData(3, index);
-                    TShock.Log.ConsoleInfo($"<MultiSCore> 此玩家来自另一个启用了 MultiSCore 插件的服务器");
+                    TShock.Log.ConsoleInfo(Utils.GetText("Log_FromAnothorMultiSCore"));
                 }
             }
         }
@@ -78,7 +78,6 @@ namespace MultiSCore.Core
         {
             if ((Netplay.Clients[buffer.whoAmI].State < 10 && packetid > 12 && packetid != 93 && packetid != 16 && packetid != 42 && packetid != 50 && packetid != 38 && packetid != 68 && packetid != 15) || (Netplay.Clients[buffer.whoAmI].State == 0 && packetid != 1 && packetid != 15))
             {
-                TShock.Log.ConsoleInfo($"当前状态下操作无效 - {(PacketTypes)packetid}");
                 return HookResult.Cancel;
             }
             var index = buffer.whoAmI;
@@ -100,7 +99,7 @@ namespace MultiSCore.Core
                             if (MSCPlugin.Instance.ServerConfig.AllowDirectJoin)
                                 return MSCPlugin.Instance.OldGetDataHandler.Invoke(buffer, ref packetid, ref readoffset, ref start, ref length); //让tr自己处理加入事件
                             else
-                                NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral("此服务器不允许直接连接"));
+                                NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral(Utils.GetText("Log_DontAllowDirectJoin")));
                             return HookResult.Cancel;
                         }
                         if (!MSCHooks.OnPlayerJoin(index, reader.ReadString(), key, reader.ReadString(), reader.ReadString(), out var joinArgs)) OnConnectRequest(joinArgs);
@@ -128,19 +127,6 @@ namespace MultiSCore.Core
                 if (Utils.GetKey(args.Index) == key)
                     switch (args.Type)
                     {
-                        case Utils.CustomPacket.ConnectSuccess:
-                            if (!MSCHooks.OnPlayerFinishSwitch(args.Index, out var finishJoinArgs))
-                            {
-                                args.Player.RemoveData("MultiSCore_Switching");
-                                if (args.Player.IsForwordPlayer())
-                                    ForwordServer.OnPlayerFinishSwitch(finishJoinArgs);
-                                else HostServer.OnPlayerFinishSwitch(finishJoinArgs);
-                            }
-                            break;
-                        case Utils.CustomPacket.Spawn:
-                            plr?.Spawn(PlayerSpawnContext.SpawningIntoWorld);
-                            TShock.Log.ConsoleInfo($"<MultiSCore> 传送 {plr.Name} 至出生点");
-                            break;
                         case Utils.CustomPacket.Command:
                             var cmd = reader.ReadString();
                             Commands.HandleCommand(plr, cmd.StartsWith(Commands.Specifier) || cmd.StartsWith(Commands.SilentSpecifier) ? cmd : Commands.Specifier + cmd);

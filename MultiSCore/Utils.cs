@@ -13,14 +13,17 @@ namespace MultiSCore
     {
         public enum CustomPacket
         {
-            ConnectSuccess,
-            Spawn,
             Command
         }
         public class HostInfo
         {
             public Version Version { get; set; }
             public string Key { get; set; }
+        }
+        public static string GetText(string key)
+        {
+            try { return MSCPlugin.Instance.ServerConfig.Language.Value<string>(key); }
+            catch { return "null"; }
         }
         public static bool TryParseAddress(string address, out string ip)
         {

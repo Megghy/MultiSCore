@@ -4,6 +4,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using Terraria;
+using Terraria.Chat.Commands;
 using TerrariaApi.Server;
 using TShockAPI;
 using TShockAPI.Hooks;
@@ -85,7 +86,7 @@ namespace MultiSCore
                     case "t":
                         if (plr.GetData<string>("MultiSCore_Switching") is { })
                         {
-                            plr.SendErrorMsg($"正在跳转中, 请勿使用此命令");
+                            plr.SendErrorMsg(Utils.GetText("Command_IsSwitching"));
                             return;
                         }
                         if (cmd.Count > 1)
@@ -93,38 +94,37 @@ namespace MultiSCore
                             if (Instance.ServerConfig.Servers.FirstOrDefault(s => s.Name == cmd[1] || s.Name.ToLower().StartsWith(cmd[1])) is { } server)
                             {
                                 if (!string.IsNullOrEmpty(server.Permission) && plr.HasPermission(server.Permission))
-                                    plr.SendErrorMsg($"你没有权限进入服务器 {server.Name}");
+                                    plr.SendErrorMsg(string.Format(Utils.GetText("Command_NoPermission"), server.Name));
                                 else
                                 {
                                     if (mscp != null && mscp.Server.Name == server.Name)
-                                        plr.SendErrorMsg($"你已处于服务器 {server.Name} 中");
+                                        plr.SendErrorMsg(string.Format(Utils.GetText("Command_AlreadyIn"), server.Name));
                                     else
                                     {
                                         plr.SetData("MultiSCore_Switching", "");
-                                        plr.SendInfoMsg($"正在传送至服务器 {server.Name}");
-                                        TShock.Log.ConsoleInfo($"<MultiSCore> 玩家 {plr.Name} 准备传送至服务器 {server.Name}");
+                                        plr.SendInfoMsg(string.Format(Utils.GetText("Command_Switch"), server.Name));
+                                        TShock.Log.ConsoleInfo(string.Format(Utils.GetText("Log_Switch"), plr.Name, server.Name));
                                         new MSCPlayer(plr.Index).SwitchServer(server);
                                     }
                                 }
                             }
-                            else plr.SendErrorMsg($"未找到含有关键词 {cmd[1]} 的服务器");
+                            else plr.SendErrorMsg(string.Format(Utils.GetText("Command_ServerNotFound"), cmd[1]));
                         }
-                        else plr.SendErrorMsg($"无效的格式.\r\n" +
-                   $"/msc tp([c/B3CE95:t]) <[c/B3CE95:服务器名]>  --  传送到指定服务器");
+                        else plr.SendErrorMsg($"{Utils.GetText("Prompt_InvalidFormat")}\r\n{Utils.GetText("Help_Tp")}");
                         break;
                     case "back":
                     case "b":
                         if (mscp != null)
                         {
                             mscp.BackToHost();
-                            plr.SendSuccessMsg($"已返回主服务器");
-                            TShock.Log.ConsoleInfo($"<MultiSCore> 玩家 {plr.Name} 返回主服务器");
+                            plr.SendSuccessMsg(Utils.GetText("Command_Back"));
+                            TShock.Log.ConsoleInfo(string.Format(Utils.GetText("Log_Back"), plr.Name));
                         }
-                        else plr.SendErrorMessage("你已处于主服务器中");
+                        else plr.SendErrorMessage(Utils.GetText("Command_NotJoined"));
                         break;
                     case "list":
                     case "l":
-                        plr.SendSuccessMsg($"可用的服务器: {string.Join(", ", ServerConfig.Servers.Where(s => s.Visible).Select(s => s.Name))}");
+                        plr.SendSuccessMsg($"{Utils.GetText("Command_AviliableServer")}{string.Join(", ", ServerConfig.Servers.Where(s => s.Visible).Select(s => s.Name))}");
                         break;
                     case "password":
                     case "p":
@@ -133,10 +133,9 @@ namespace MultiSCore
                             if (cmd.Count > 1)
                                 mscp.SendDataToForword(new RawDataBuilder(38).PackString(cmd[1]));
                             else
-                                plr.SendErrorMsg($"无效的格式.\r\n" +
-                   $"/msc password([c/B3CE95:p]) <[c/B3CE95:密码]>  --  向当前连接到的服务器发送指定的密码");
+                                plr.SendErrorMsg($"{Utils.GetText("Prompt_InvalidFormat")}\r\n{Utils.GetText("Help_Password")}");
                         }
-                        else plr.SendInfoMsg($"你尚未进入任何服务器");
+                        else plr.SendInfoMsg(Utils.GetText("Command_NotJoined"));
                         break;
                     case "command":
                     case "cmd":
@@ -148,11 +147,10 @@ namespace MultiSCore
                                 cmd.RemoveAt(0);
                                 Commands.HandleCommand(plr, string.Join(" ", cmd));
                             }
-                            else
-                                plr.SendErrorMsg($"无效的格式.\r\n" +
-                   $"/msc command([c/B3CE95:c]) <[c/B3CE95:指令]>  --  在传送前的服务器执行命令");
+else
+                                plr.SendErrorMsg($"{Utils.GetText("Prompt_InvalidFormat")}\r\n{Utils.GetText("Help_Command")}");
                         }
-                        else plr.SendInfoMsg($"你尚未进入任何服务器");
+                        else plr.SendInfoMsg(Utils.GetText("Command_NotJoined"));
                         break;
                     default:
                         sendHelpText();
@@ -162,11 +160,11 @@ namespace MultiSCore
             else sendHelpText();
             void sendHelpText()
             {
-                plr.SendInfoMsg($"无效的命令.\r\n" +
-                    $"/msc tp([c/B3CE95:t]) <[c/B3CE95:服务器名]>  --  传送到指定服务器\r\n" +
-                    $"/msc back([c/B3CE95:b])  --  传送回主服务器\r\n" +
-                    $"/msc list([c/B3CE95:l])  --  列出所有可用的服务器\r\n" +
-                    $"/msc command([c/B3CE95:c]) <[c/B3CE95:指令]>  --  在传送前的服务器执行命令"
+                plr.SendInfoMsg($"{Utils.GetText("Prompt_InvalidFormat")}\r\n" +
+                    $"{Utils.GetText("Help_Tp")}\r\n" +
+                    $"{Utils.GetText("Help_Back")}\r\n" +
+                    $"{Utils.GetText("Help_List")}\r\n" +
+                    $"{Utils.GetText("Help_Command")}"
                     );
             }
         }
