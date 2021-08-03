@@ -44,6 +44,18 @@ namespace MultiSCore
             public BinaryReader Reader { get; internal set; }
             public bool Handled { get; set; }
         }
+        public struct PlayerReadyToSwitchEventArgs
+        {
+            public PlayerReadyToSwitchEventArgs(TSPlayer plr)
+            {
+                Handled = false;
+                Player = plr;
+                Index = plr.Index;
+            }
+            public int Index { get; internal set; }
+            public TSPlayer Player { get; internal set; }
+            public bool Handled { get; set; }
+        }
         public struct PlayerFinishSwitchEventArgs
         {
             public PlayerFinishSwitchEventArgs(int index)
@@ -59,6 +71,8 @@ namespace MultiSCore
         public static event PlayerJoinEvent PlayerJoin;
         public delegate void RecieveCustomDataEvent(RecieveCustomDataEventArgs args);
         public static event RecieveCustomDataEvent RecieveCustomData;
+        public delegate void PlayerReadyToSwitchEvent(PlayerReadyToSwitchEventArgs args);
+        public static event PlayerReadyToSwitchEvent PlayerReadyToSwitch;
         public delegate void PlayerFinishSwitchEvent(PlayerFinishSwitchEventArgs args);
         public static event PlayerFinishSwitchEvent PlayerFinishJoin;
         internal static bool OnPlayerJoin(int index, string name, string key, string ip, string version, out PlayerJoinEventArgs args)
@@ -67,13 +81,18 @@ namespace MultiSCore
             PlayerJoin?.Invoke(args);
             return args.Handled;
         }
-
         internal static bool OnRecieveCustomData(int index, Utils.CustomPacket type, BinaryReader reader, out RecieveCustomDataEventArgs args)
         {
             var position = reader.BaseStream.Position;
             args = new(index, type, reader);
             RecieveCustomData?.Invoke(args);
             args.Reader.BaseStream.Position = position;
+            return args.Handled;
+        }
+        internal static bool OnPlayerReadyToSwitch(TSPlayer plr, out PlayerReadyToSwitchEventArgs args)
+        {
+            args = new(plr);
+            PlayerReadyToSwitch?.Invoke(args);
             return args.Handled;
         }
         internal static bool OnPlayerFinishSwitch(int index, out PlayerFinishSwitchEventArgs args)

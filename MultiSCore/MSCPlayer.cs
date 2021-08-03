@@ -65,6 +65,11 @@ namespace MultiSCore
         }
         public void SwitchServer(Config.ForwordServer server)
         {
+            if (MSCHooks.OnPlayerReadyToSwitch(Player, out _))
+            {
+                Player.RemoveData("MultiSCore_Switching");
+                return;
+            }
             if (!Player.IsForwordPlayer())
             {
                 if (Utils.TryParseAddress(server.IP, out var ip))
@@ -81,6 +86,7 @@ namespace MultiSCore
                         MSCPlugin.Instance.ForwordPlayers[Index] = this;
                         Task.Run(StartReceiveData);
 
+                        Player.SaveServerCharacter();//离开前保存玩家数据使共用数据库时同步玩家存档
                         if (server.Key.StartsWith("Terraria") && int.TryParse(server.Key.Remove(0, 8), out _) && server.Key.Length == 11)
                             IsVanillaServer = true;
 
@@ -127,8 +133,7 @@ namespace MultiSCore
                             Netplay.Clients[Index].TileSections[i, j] = false;
                         }
                     }
-                    if (Player.ContainsData("MultiSCore_Switching"))
-                        Player.RemoveData("MultiSCore_Switching");
+                    Player.RemoveData("MultiSCore_Switching");
 
                     Player.SendRawData(new RawDataBuilder(3).PackByte((byte)Index).PackByte((byte)true.GetHashCode()).GetByteData()); //修改玩家slot
 
@@ -148,14 +153,14 @@ namespace MultiSCore
                         Player.IgnoreSSCPackets = false;
                         Main.ServerSideCharacter = sscStatue;
                     }
-                    if (MSCPlugin.Instance.ServerConfig.RememberLastPoint && Player != null)
+                    if (MSCPlugin.Instance.ServerConfig.RememberLastPoint)
                     {
                         var p = Player.GetData<Point>("MultiSCore_LastPosition");
                         Player.Teleport(p.X * 16, p.Y * 16);
                         Player.RemoveData("MultiSCore_LastPosition");
                     }
                     else
-                        Player?.Spawn(PlayerSpawnContext.RecallFromItem);
+                        Player.Teleport(Main.spawnTileX * 16, (Main.spawnTileY - 3) * 16);
                     NetMessage.SendData(7, Index);  //重置ssc状态/发送世界信息
                     //Dispose(); 在收到玩家发来的6号包时再卸载
                 }

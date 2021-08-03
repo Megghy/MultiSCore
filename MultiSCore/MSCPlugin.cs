@@ -36,17 +36,25 @@ namespace MultiSCore
 
             GeneralHooks.ReloadEvent += OnReload;
 
-            ServerApi.Hooks.NetGreetPlayer.Register(this, (greet) => {
-                TShock.Players.Where(p => p != null).ForEach(p => TShock.Players.ForEach(_p => p.SendData(PacketTypes.PlayerActive, null, p.Index, (ForwordPlayers[p.Index] == null).GetHashCode())));
-                
-                if (ForwordInfo[greet.Who] is { } && !MSCHooks.OnPlayerFinishSwitch(greet.Who, out var finishJoinArgs))
-                    ForwordServer.OnPlayerFinishSwitch(finishJoinArgs);
-
-                TShock.Players[greet.Who].IgnoreSSCPackets = false;
-            });
+            ServerApi.Hooks.NetGreetPlayer.Register(this, ForwordServer.OnGreetPlayer);
             ServerApi.Hooks.ServerLeave.Register(this, Server.OnPlayerLeave, int.MaxValue);
 
             Commands.ChatCommands.Add(new("msc.use", OnCommand, "msc") { AllowServer = false });
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                ServerApi.Hooks.GamePostInitialize.Deregister(this, OnPostInit);
+                Hooks.Net.ReceiveData = OldGetDataHandler;
+                Hooks.Net.SendBytes = OldSendDataHandler;
+
+                GeneralHooks.ReloadEvent -= OnReload;
+
+                ServerApi.Hooks.NetGreetPlayer.Deregister(this, ForwordServer.OnGreetPlayer);
+                ServerApi.Hooks.ServerLeave.Deregister(this, Server.OnPlayerLeave);
+                base.Dispose(disposing);
+            }
         }
         public static MSCPlugin Instance;
         public Config ServerConfig = new();
