@@ -153,6 +153,7 @@ namespace MultiSCore
                         Player.IgnoreSSCPackets = false;
                         Main.ServerSideCharacter = sscStatue;
                     }
+                    Player.Spawn(PlayerSpawnContext.SpawningIntoWorld);
                     if (MSCPlugin.Instance.ServerConfig.RememberLastPoint)
                     {
                         var p = Player.GetData<Point>("MultiSCore_LastPosition");
@@ -186,7 +187,7 @@ namespace MultiSCore
         {
             try
             {
-                var buffer = new byte[51200];
+                var buffer = new byte[102400];
                 while (!ShouldStop && Connection is { Connected: true } && Player is { ConnectionAlive: true })
                 {
                     CheckBuffer(Connection.Client.Receive(buffer), buffer);
@@ -211,16 +212,16 @@ namespace MultiSCore
             try
             {
                 if (size == 0) return;
-                var length = buffer[0];
-                if (size > length && buffer[2] != 10)
+                var length = BitConverter.ToUInt16(buffer, 0);
+                if (size > length)
                 {
                     var position = 0;
                     while (position < size)
                     {
-                        var tempLength = buffer[position];
-                        if (buffer[position + 2] == 10 || tempLength == 0 || buffer[position + 1] != 0)
-                            break;  //俺实在拿10号包没办法
-                        if (!ProcessData(buffer, position, size))
+                        var tempLength = BitConverter.ToUInt16(buffer, position);
+                        if (tempLength == 0)
+                            break;
+                        if (!ProcessData(buffer, position, tempLength))
                             Array.Clear(buffer, position, tempLength);
                         position += tempLength;
                     }
@@ -238,14 +239,14 @@ namespace MultiSCore
         /// <param name="startIndex"></param>
         /// <param name="size"></param>
         /// <returns></returns>
-        bool ProcessData(byte[] tempBuffer, int startIndex, int size)
+        bool ProcessData(byte[] tempBuffer, int startIndex, int length)
         {
             try
             {
                 switch (tempBuffer[startIndex + 2])
                 {
                     case 2:
-                        using (var reader = new BinaryReader(new MemoryStream(tempBuffer, startIndex, tempBuffer[startIndex])))
+                        using (var reader = new BinaryReader(new MemoryStream(tempBuffer, startIndex, length)))
                         {
                             reader.BaseStream.Position = 3L;
                             var reason = NetworkText.Deserialize(reader);
@@ -269,7 +270,7 @@ namespace MultiSCore
                         }
                         return true;
                     case 15:
-                        using (var reader = new BinaryReader(new MemoryStream(tempBuffer, startIndex, tempBuffer[startIndex])))
+                        using (var reader = new BinaryReader(new MemoryStream(tempBuffer, startIndex, length)))
                         {
                             var type = (Utils.CustomPacket)tempBuffer[startIndex + 3];
                             reader.BaseStream.Position = 4L;
