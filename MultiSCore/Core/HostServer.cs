@@ -27,8 +27,12 @@ namespace MultiSCore.Core
                     case 42:
                     case 50:
                     case 68:
-                    case 5:
                         return HookResult.Cancel;
+                    case 5:
+                        if (mscp.Server.RememberHostInventory)
+                            return HookResult.Cancel;
+                        else
+                            break;
                     case 6:
                         mscp.Dispose();
                         return HookResult.Cancel;

@@ -128,7 +128,7 @@ namespace MultiSCore
                             plr.SendSuccessMsg(Utils.GetText("Command_Back"));
                             TShock.Log.ConsoleInfo(string.Format(Utils.GetText("Log_Back"), plr.Name));
                         }
-                        else plr.SendErrorMessage(Utils.GetText("Command_NotJoined"));
+                        else plr.SendErrorMsg(Utils.GetText("Command_NotJoined"));
                         break;
                     case "list":
                     case "l":

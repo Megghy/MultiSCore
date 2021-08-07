@@ -29,8 +29,10 @@ namespace MultiSCore
                     MSCPlugin.Instance.ServerConfig.Language = JObject.Parse(File.ReadAllText(languagePath));
                 else
                 {
-                    TShock.Log.ConsoleError($"File {MSCPlugin.Instance.ServerConfig.LanguageFileName} doesn't exist");
-                    MSCPlugin.Instance.ServerConfig.Language = JObject.Parse(Encoding.Default.GetString(Properties.Resources.zh_cn));
+                    FileTools.CreateIfNot(Path.Combine(directoryPath, "zh_cn.json"), UTF8Encoding.UTF8.GetString(Properties.Resources.zh_cn));
+                    FileTools.CreateIfNot(Path.Combine(directoryPath, "en_us.json"), UTF8Encoding.UTF8.GetString(Properties.Resources.en_us));
+                    TShock.Log.ConsoleError($"<MultiSCore> File {MSCPlugin.Instance.ServerConfig.LanguageFileName} doesn't exist, re-created, currently using English language pack by default");
+                    MSCPlugin.Instance.ServerConfig.Language = JObject.Parse(UTF8Encoding.UTF8.GetString(Properties.Resources.en_us));
                 }
                 if (MSCPlugin.Instance.ServerConfig.Servers.Any(s => s.Key.StartsWith("Terraria")))
                 {
@@ -52,8 +54,8 @@ namespace MultiSCore
                             new() { Key = "1145141919810", Visible = true, Permission = "", IP = "yfeil.top", Port = 7777, Name = "yfeil", SpawnX = -1, SpawnY = -1, RememberHostInventory = true, GlobalCommand = new() { "online", "who" } }
                         }
                     }, Formatting.Indented));
-                    File.WriteAllBytes(Path.Combine(directoryPath, "zh_cn.json"), Properties.Resources.zh_cn);
-                    File.WriteAllBytes(Path.Combine(directoryPath, "en_us.json"), Properties.Resources.en_us);
+                    FileTools.CreateIfNot(Path.Combine(directoryPath, "zh_cn.json"), UTF8Encoding.UTF8.GetString(Properties.Resources.zh_cn));
+                    FileTools.CreateIfNot(Path.Combine(directoryPath, "en_us.json"), UTF8Encoding.UTF8.GetString(Properties.Resources.en_us));
                 }
             }
             catch (Exception ex)

@@ -44,13 +44,11 @@ namespace MultiSCore
                 ShouldStop = true;
                 ForwordIndex = -1;
                 Server = null;
-                if (Connection != null)
-                {
+                if (Connection is { Connected:true })
                     Connection?.Client.Shutdown(SocketShutdown.Both);
-                    Connection?.Client.Close();
-                    Connection?.Close();
-                    Connection = null;
-                }
+                Connection?.Client.Close();
+                Connection?.Close();
+                Connection = null;
                 Connected = false;
             }
             catch (Exception ex)
@@ -101,9 +99,10 @@ namespace MultiSCore
                     }
                     catch
                     {
+                        Player.RemoveData("MultiSCore_Switching");
                         TShock.Log.ConsoleError(string.Format(Utils.GetText("Log_CannotConnect"), server.IP, server.Port));
                         Player?.SendErrorMsg(string.Format(Utils.GetText("Prompt_CannotConnect"), server.Name));
-                        Reset();
+                        Dispose();
                     }
 
                 }
@@ -135,6 +134,8 @@ namespace MultiSCore
                     }
                     Player.RemoveData("MultiSCore_Switching");
 
+                    if (!Player.ConnectionAlive)
+                        return;
                     Player.SendRawData(new RawDataBuilder(3).PackByte((byte)Index).PackByte((byte)true.GetHashCode()).GetByteData()); //修改玩家slot
 
                     TShock.Players.Where(p => p != null && p.Index != Index).ForEach(p =>
