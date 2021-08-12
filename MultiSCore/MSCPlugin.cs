@@ -21,23 +21,21 @@ namespace MultiSCore
         public override Version Version => Assembly.GetExecutingAssembly().GetName().Version;
         public override void Initialize()
         {
-            ServerApi.Hooks.GamePostInitialize.Register(this, OnPostInit);
-        }
-        void OnPostInit(EventArgs args)
-        {
             Config.Load();
-
             Server = new(ServerConfig.Name, ServerConfig.Key);
 
-            OldGetDataHandler = Hooks.Net.ReceiveData;
-            Hooks.Net.ReceiveData = Server.OnReceiveData;
-            OldSendDataHandler = Hooks.Net.SendBytes;
-            Hooks.Net.SendBytes = Server.OnSendData;
-
+            ServerApi.Hooks.GamePostInitialize.Register(this, OnPostInit);
             GeneralHooks.ReloadEvent += OnReload;
 
             ServerApi.Hooks.NetGreetPlayer.Register(this, ForwordServer.OnGreetPlayer);
             ServerApi.Hooks.ServerLeave.Register(this, Server.OnPlayerLeave, int.MaxValue);
+        }
+        void OnPostInit(EventArgs args)
+        {
+            OldGetDataHandler = Hooks.Net.ReceiveData;
+            Hooks.Net.ReceiveData = Server.OnReceiveData;
+            OldSendDataHandler = Hooks.Net.SendBytes;
+            Hooks.Net.SendBytes = Server.OnSendData;
 
             Commands.ChatCommands.Add(new("msc.use", OnCommand, "msc") { AllowServer = false });
         }
@@ -46,14 +44,15 @@ namespace MultiSCore
             if (disposing)
             {
                 ServerApi.Hooks.GamePostInitialize.Deregister(this, OnPostInit);
-                Hooks.Net.ReceiveData = OldGetDataHandler;
-                Hooks.Net.SendBytes = OldSendDataHandler;
+                if(OldGetDataHandler is not null)
+                    Hooks.Net.ReceiveData = OldGetDataHandler;
+                if (OldSendDataHandler is not null)
+                    Hooks.Net.SendBytes = OldSendDataHandler;
 
                 GeneralHooks.ReloadEvent -= OnReload;
 
                 ServerApi.Hooks.NetGreetPlayer.Deregister(this, ForwordServer.OnGreetPlayer);
                 ServerApi.Hooks.ServerLeave.Deregister(this, Server.OnPlayerLeave);
-                base.Dispose(disposing);
             }
         }
         public static MSCPlugin Instance;

@@ -81,19 +81,18 @@ namespace MultiSCore.Core
                 return HookResult.Cancel;
             }
             var index = buffer.whoAmI;
-            var reader = buffer.reader;
             var position = buffer.reader.BaseStream.Position;
-            reader.BaseStream.Position = start + 1;
+            buffer.reader.BaseStream.Position = start + 1;
             try
             {
                 switch (packetid)
                 {
                     case 15:
-                        if (!MSCHooks.OnRecieveCustomData(index, (Utils.CustomPacket)reader.ReadByte(), reader, out var recieveArgs))
+                        if (!MSCHooks.OnRecieveCustomData(index, (Utils.CustomPacket)buffer.reader.ReadByte(), buffer.reader, out var recieveArgs))
                             OnRecieveCustomData(recieveArgs);
                         return HookResult.Cancel;
                     case 1:
-                        var key = reader.ReadString();
+                        var key = buffer.reader.ReadString();
                         if (key.StartsWith("Terraria"))
                         {
                             if (MSCPlugin.Instance.ServerConfig.AllowDirectJoin)
@@ -102,11 +101,11 @@ namespace MultiSCore.Core
                                 NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral(Utils.GetText("Log_DontAllowDirectJoin")));
                             return HookResult.Cancel;
                         }
-                        if (!MSCHooks.OnPlayerJoin(index, reader.ReadString(), key, reader.ReadString(), reader.ReadString(), out var joinArgs)) OnConnectRequest(joinArgs);
+                        if (!MSCHooks.OnPlayerJoin(index, buffer.reader.ReadString(), key, buffer.reader.ReadString(), buffer.reader.ReadString(), out var joinArgs)) OnConnectRequest(joinArgs);
                         return HookResult.Cancel;
                 }
                 buffer.reader.BaseStream.Position = position;
-                if (MSCPlugin.Instance.ForwordPlayers[buffer.whoAmI] is { } mscp)
+                if (MSCPlugin.Instance.ForwordPlayers[index] is { } mscp)
                 {
                     HostServer.OnReceiveData(buffer, ref packetid, ref readoffset, ref start, ref length);
                     return HookResult.Cancel;

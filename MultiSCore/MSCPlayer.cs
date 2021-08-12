@@ -22,10 +22,11 @@ namespace MultiSCore
         }
         public int Index;
         public int ForwordIndex;
-        public TSPlayer Player { get { return TShock.Players[Index]; } set { } }
+        public TSPlayer Player => TShock.Players[Index];
         public bool Connected = false;
         public Config.ForwordServer Server;
         public TcpClient Connection;
+        public byte[] Buffer = new byte[102400];
         public string Password;
         public string Key => Server?.Key ?? MSCPlugin.Key;
 
@@ -39,22 +40,23 @@ namespace MultiSCore
         internal int PlayerDifficulty;
         public void Reset()
         {
+            ShouldStop = true;
+            ForwordIndex = -1;
+            Server = null;
+            Buffer = null;
             try
             {
-                ShouldStop = true;
-                ForwordIndex = -1;
-                Server = null;
                 if (Connection is { Connected:true })
                     Connection?.Client.Shutdown(SocketShutdown.Both);
                 Connection?.Client.Close();
                 Connection?.Close();
-                Connection = null;
-                Connected = false;
             }
             catch (Exception ex)
             {
                 TShock.Log.ConsoleError($"<MultiSCore> Reset MSCPlayer error: {ex}");
             }
+            Connection = null;
+            Connected = false;
         }
         public void SendMessage(string text, Color color = default)
         {
@@ -77,6 +79,7 @@ namespace MultiSCore
                     {
                         Connection = new();
                         Connection.Connect(server.IP, server.Port);
+                        Buffer = new byte[102400];
 
                         Server = server;
 
@@ -188,12 +191,10 @@ namespace MultiSCore
         {
             try
             {
-                var buffer = new byte[102400];
-                while (!ShouldStop && Connection is { Connected: true } && Player is { ConnectionAlive: true })
+                while (!ShouldStop && Player is { ConnectionAlive: true })
                 {
-                    CheckBuffer(Connection.Client.Receive(buffer), buffer);
+                    CheckBuffer(Connection.Client.Receive(Buffer), Buffer);
                 }
-                buffer = null;
             }
             catch (SocketException)
             {
@@ -206,7 +207,8 @@ namespace MultiSCore
             catch (Exception ex)
             {
                 TShock.Log.ConsoleError($"<MultiSCore> Host recieve packet error: {ex}");
-            }
+            }           
+            Buffer = null;
         }
         void CheckBuffer(int size, byte[] buffer)
         {
