@@ -21,7 +21,7 @@ namespace MultiSCore.Core
         }
         public string Name { get; set; }
         public string Key { get; set; }
-        public void OnConnectRequest(MSCHooks.PlayerJoinEventArgs args)
+        public bool OnConnectRequest(MSCHooks.PlayerJoinEventArgs args)
         {
             var index = args.Index;
             if (!MSCPlugin.Instance.ServerConfig.AllowOthorServerJoin)
@@ -61,18 +61,20 @@ namespace MultiSCore.Core
                             if (text == "A1" && Utils.GetConfigValue<bool>("KickProxyUsers"))
                             {
                                 tsplayer.Disconnect("Proxy connections are not allowed.");
-                                return;
+                                return false;
                             }
                         }
                         else
                             TShock.Players[index] = tsplayer;
-                    }
-                    Netplay.Clients[index].State = 1;
-                    MSCPlugin.Instance.ForwordInfo[index] = new() { Version = args.Version, Key = args.Key };
-                    NetMessage.TrySendData(3, index);
+                    }                    
+                    MSCPlugin.Instance.ForwordInfo[index] = new() { Version = args.Version, Key = args.Key, TRVersion = args.TRVersion };
                     TShock.Log.ConsoleInfo(Utils.GetText("Log_FromAnothorMultiSCore"));
+                    /*NetMessage.TrySendData(3, index);
+                    Netplay.Clients[index].State = 1;*/
+                    return true;
                 }
             }
+            return false;
         }
         public HookResult OnReceiveData(MessageBuffer buffer, ref byte packetid, ref int readoffset, ref int start, ref int length)
         {
@@ -96,12 +98,26 @@ namespace MultiSCore.Core
                         if (key.StartsWith("Terraria"))
                         {
                             if (MSCPlugin.Instance.ServerConfig.AllowDirectJoin)
-                                return MSCPlugin.Instance.OldGetDataHandler.Invoke(buffer, ref packetid, ref readoffset, ref start, ref length); //让tr自己处理加入事件
+                            {
+                                MSCPlugin.Instance.VersionInfo[index] = key.Remove(0, 8);
+                                return MSCPlugin.Instance.OldGetDataHandler(buffer, ref packetid, ref readoffset, ref start, ref length);
+                            }
                             else
                                 NetMessage.TrySendData(2, index, -1, NetworkText.FromLiteral(Utils.GetText("Log_DontAllowDirectJoin")));
                             return HookResult.Cancel;
                         }
-                        if (!MSCHooks.OnPlayerJoin(index, buffer.reader.ReadString(), key, buffer.reader.ReadString(), buffer.reader.ReadString(), out var joinArgs)) OnConnectRequest(joinArgs);
+                        else if (!MSCHooks.OnPlayerJoin(index, buffer.reader.ReadString(), key, buffer.reader.ReadString(), buffer.reader.ReadString(), buffer.reader.ReadString(), out var joinArgs) && OnConnectRequest(joinArgs))
+                        {
+                            var tempBuffer = buffer.readBuffer.ToList();
+                            tempBuffer.RemoveRange(start - 2, length + 2);
+                            var data = new RawDataBuilder(1).PackString($"Terraria{joinArgs.TRVersion}").GetByteData();
+                            tempBuffer.InsertRange(start - 2, data);
+                            length = data.Length - 2;
+                            tempBuffer.CopyTo(buffer.readBuffer, 0);
+                            buffer.reader = new(new System.IO.MemoryStream(buffer.readBuffer));
+                            buffer.readerStream = (System.IO.MemoryStream)buffer.reader.BaseStream;
+                            return MSCPlugin.Instance.OldGetDataHandler(buffer, ref packetid, ref readoffset, ref start, ref length);
+                        }
                         return HookResult.Cancel;
                 }
                 buffer.reader.BaseStream.Position = position;

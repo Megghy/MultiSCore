@@ -17,6 +17,7 @@ namespace MultiSCore
         }
         public class HostInfo
         {
+            public string TRVersion { get; set; }
             public Version Version { get; set; }
             public string Key { get; set; }
         }

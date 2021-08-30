@@ -3,8 +3,8 @@ using OTAPI;
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using Terraria;
-using Terraria.Chat.Commands;
 using TerrariaApi.Server;
 using TShockAPI;
 using TShockAPI.Hooks;
@@ -44,7 +44,7 @@ namespace MultiSCore
             if (disposing)
             {
                 ServerApi.Hooks.GamePostInitialize.Deregister(this, OnPostInit);
-                if(OldGetDataHandler is not null)
+                if (OldGetDataHandler is not null)
                     Hooks.Net.ReceiveData = OldGetDataHandler;
                 if (OldSendDataHandler is not null)
                     Hooks.Net.SendBytes = OldSendDataHandler;
@@ -69,6 +69,7 @@ namespace MultiSCore
         /// 使用反代进入此服务器的玩家
         /// </summary>
         public Utils.HostInfo[] ForwordInfo = new Utils.HostInfo[256];
+        public string[] VersionInfo = new string[256];
         void OnReload(ReloadEventArgs args)
         {
             Config.Load();
@@ -154,10 +155,15 @@ namespace MultiSCore
                                 cmd.RemoveAt(0);
                                 Commands.HandleCommand(plr, string.Join(" ", cmd));
                             }
-else
+                            else
                                 plr.SendErrorMsg($"{Utils.GetText("Prompt_InvalidFormat")}\r\n{Utils.GetText("Help_Command")}");
                         }
                         else plr.SendInfoMsg(Utils.GetText("Command_NotJoined"));
+                        break;
+                    case "online":
+                    case "playing":
+                    case "o":
+                        var sb = new StringBuilder(); //todo
                         break;
                     default:
                         sendHelpText();

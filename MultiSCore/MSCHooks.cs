@@ -12,7 +12,7 @@ namespace MultiSCore
     {
         public struct PlayerJoinEventArgs
         {
-            public PlayerJoinEventArgs(int index,string name, string key, string ip, string version)
+            public PlayerJoinEventArgs(int index,string name, string key, string ip, string version, string trVersion)
             {
                 Handled = false;
                 Index = index;
@@ -21,12 +21,14 @@ namespace MultiSCore
                 IP = ip;
                 Version.TryParse(version, out var _v);
                 Version = _v;
+                TRVersion = trVersion;
             }
             public int Index { get; internal set; }
             public string Name { get; internal set; }
             public string Key { get; internal set; }
             public string IP { get; internal set; }
             public Version Version { get; set; }
+            public string TRVersion { get; set;  }
             public bool Handled { get; set; }
         }
         public struct RecieveCustomDataEventArgs
@@ -75,9 +77,9 @@ namespace MultiSCore
         public static event PlayerReadyToSwitchEvent PlayerReadyToSwitch;
         public delegate void PlayerFinishSwitchEvent(PlayerFinishSwitchEventArgs args);
         public static event PlayerFinishSwitchEvent PlayerFinishJoin;
-        internal static bool OnPlayerJoin(int index, string name, string key, string ip, string version, out PlayerJoinEventArgs args)
+        internal static bool OnPlayerJoin(int index, string name, string key, string ip, string version, string trVersion, out PlayerJoinEventArgs args)
         {
-            args = new(index, name, key, ip, version);
+            args = new(index, name, key, ip, version, trVersion);
             PlayerJoin?.Invoke(args);
             return args.Handled;
         }

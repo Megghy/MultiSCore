@@ -98,12 +98,17 @@ namespace MultiSCore
                         DataBackup.CopyCharacter(Player);
                         PlayerDifficulty = Player.TPlayer.difficulty;
 
-                        SendDataToForword(new RawDataBuilder(1).PackString(Key).PackString(server.Name).PackString(Player.IP).PackString(MSCPlugin.Instance.Version.ToString()));  //发起连接请求
+                        SendDataToForword(new RawDataBuilder(1)
+                            .PackString(Key)
+                            .PackString(server.Name)
+                            .PackString(Player.IP)
+                            .PackString(MSCPlugin.Instance.Version.ToString())
+                            .PackString(Player.IsForwordPlayer() ? "0" : MSCPlugin.Instance.VersionInfo[Index]));  //发起连接请求
                     }
-                    catch
+                    catch(Exception ex)
                     {
                         Player.RemoveData("MultiSCore_Switching");
-                        TShock.Log.ConsoleError(string.Format(Utils.GetText("Log_CannotConnect"), server.IP, server.Port));
+                        TShock.Log.ConsoleError(string.Format($"{Utils.GetText("Log_CannotConnect")}\r\n{ex}", server.IP, server.Port));
                         Player?.SendErrorMsg(string.Format(Utils.GetText("Prompt_CannotConnect"), server.Name));
                         Dispose();
                     }
