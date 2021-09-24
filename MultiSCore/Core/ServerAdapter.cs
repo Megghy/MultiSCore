@@ -9,6 +9,7 @@ using Terraria.Localization;
 using Terraria.Net.Sockets;
 using TerrariaApi.Server;
 using TShockAPI;
+using static OTAPI.Hooks;
 
 namespace MultiSCore.Core
 {
@@ -49,7 +50,6 @@ namespace MultiSCore.Core
                     else
                     {
                         TSPlayer tsplayer = new(index);
-                        Utils.CacheIP?.SetValue(tsplayer, args.IP);
                         if (TShock.Utils.GetActivePlayerCount() + 1 > Utils.GetConfigValue<int>("MaxSlots") + Utils.GetConfigValue<int>("ReservedSlots"))
                             tsplayer.Disconnect(Utils.GetConfigValue<string>("ServerFullNoReservedReason"));
                         else if (!FileTools.OnWhitelist(tsplayer.IP))
@@ -116,7 +116,9 @@ namespace MultiSCore.Core
                             tempBuffer.CopyTo(buffer.readBuffer, 0);
                             buffer.reader = new(new System.IO.MemoryStream(buffer.readBuffer));
                             buffer.readerStream = (System.IO.MemoryStream)buffer.reader.BaseStream;
-                            return MSCPlugin.Instance.OldGetDataHandler(buffer, ref packetid, ref readoffset, ref start, ref length);
+                            var flag = MSCPlugin.Instance.OldGetDataHandler(buffer, ref packetid, ref readoffset, ref start, ref length);
+                            Utils.CacheIP?.SetValue(TShock.Players[joinArgs.Index], joinArgs.IP); //设置玩家ip
+                            return flag;
                         }
                         return HookResult.Cancel;
                 }
